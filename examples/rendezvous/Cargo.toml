@@ -1,0 +1,19 @@
+[package]
+name = "rendezvous-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+
+[package.metadata.release]
+release = false
+
+[dependencies]
+futures = { workspace = true }
+libp2p = { path = "../../libp2p", features = ["identify", "macros", "noise", "ping", "rendezvous", "tcp", "tokio", "yamux"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[lints]
+workspace = true

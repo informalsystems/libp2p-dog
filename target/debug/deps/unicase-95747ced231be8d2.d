@@ -1,0 +1,10 @@
+/Users/bastienfaivre/Documents/informal-systems/rust-libp2p-informal/target/debug/deps/libunicase-95747ced231be8d2.rmeta: /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/lib.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/ascii.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/unicode/mod.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/unicode/map.rs
+
+/Users/bastienfaivre/Documents/informal-systems/rust-libp2p-informal/target/debug/deps/libunicase-95747ced231be8d2.rlib: /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/lib.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/ascii.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/unicode/mod.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/unicode/map.rs
+
+/Users/bastienfaivre/Documents/informal-systems/rust-libp2p-informal/target/debug/deps/unicase-95747ced231be8d2.d: /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/lib.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/ascii.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/unicode/mod.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/unicode/map.rs
+
+/Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/lib.rs:
+/Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/ascii.rs:
+/Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/unicode/mod.rs:
+/Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.6.0/src/unicode/map.rs:

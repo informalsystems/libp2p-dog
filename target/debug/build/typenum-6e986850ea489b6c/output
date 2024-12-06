@@ -1,0 +1,3 @@
+cargo:rerun-if-changed=build/main.rs
+cargo:rustc-env=TYPENUM_BUILD_CONSTS=/Users/bastienfaivre/Documents/informal-systems/rust-libp2p-informal/target/debug/build/typenum-6e986850ea489b6c/out/consts.rs
+cargo:rustc-env=TYPENUM_BUILD_OP=/Users/bastienfaivre/Documents/informal-systems/rust-libp2p-informal/target/debug/build/typenum-6e986850ea489b6c/out/op.rs

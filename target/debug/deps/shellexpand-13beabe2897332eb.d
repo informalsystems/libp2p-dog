@@ -1,0 +1,10 @@
+/Users/bastienfaivre/Documents/informal-systems/rust-libp2p-informal/target/debug/deps/libshellexpand-13beabe2897332eb.rmeta: /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/lib.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/strings.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/wtraits.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/funcs.rs
+
+/Users/bastienfaivre/Documents/informal-systems/rust-libp2p-informal/target/debug/deps/libshellexpand-13beabe2897332eb.rlib: /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/lib.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/strings.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/wtraits.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/funcs.rs
+
+/Users/bastienfaivre/Documents/informal-systems/rust-libp2p-informal/target/debug/deps/shellexpand-13beabe2897332eb.d: /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/lib.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/strings.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/wtraits.rs /Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/funcs.rs
+
+/Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/lib.rs:
+/Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/strings.rs:
+/Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/wtraits.rs:
+/Users/bastienfaivre/.cargo/registry/src/index.crates.io-6f17d22bba15001f/shellexpand-3.1.0/src/funcs.rs:

@@ -1,0 +1,26 @@
+[package]
+name = "libp2p-dog"
+edition = "2024"
+rust-version = { workspace = true }
+description = "DOG protocol for libp2p"
+version = "0.1.0"
+authors = ["Bastien Faivre <bastien@informal.systems>"]
+license = "MIT"
+repository = "https://github.com/informalsystems/rust-libp2p"
+keywords = ["peer-to-peer", "libp2p", "networking"]
+categories = ["network-programming", "asynchronous"]
+
+[dependencies]
+asynchronous-codec = { workspace = true }
+quick-protobuf = "0.8"
+quick-protobuf-codec = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# Passing arguments to the docsrs builder in order to properly document cfg's.
+# More information: https://docs.rs/about/builds#cross-compiling
+[package.metadata.docs.rs]
+all-features = true
+
+[lints]
+workspace = true

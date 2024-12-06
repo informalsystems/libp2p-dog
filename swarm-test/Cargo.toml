@@ -1,0 +1,34 @@
+[package]
+name = "libp2p-swarm-test"
+version = "0.5.0"
+edition = "2021"
+rust-version = { workspace = true }
+license = "MIT"
+description = "Test framework for code building on top of libp2p-swarm"
+repository = "https://github.com/libp2p/rust-libp2p"
+keywords = ["peer-to-peer", "libp2p", "networking"]
+categories = ["network-programming", "asynchronous"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.80"
+libp2p-core = { workspace = true }
+libp2p-identity = { workspace = true, features = ["rand"] }
+libp2p-plaintext = { workspace = true }
+libp2p-swarm = { workspace = true }
+libp2p-tcp = { workspace = true }
+libp2p-yamux = { workspace = true }
+futures = { workspace = true }
+rand = "0.8.5"
+tracing = { workspace = true }
+futures-timer = "3.0.3"
+
+[features]
+default = ["async-std"]
+
+async-std = ["libp2p-swarm/async-std", "libp2p-tcp/async-io"]
+tokio = ["libp2p-swarm/tokio", "libp2p-tcp/tokio"]
+
+[lints]
+workspace = true
