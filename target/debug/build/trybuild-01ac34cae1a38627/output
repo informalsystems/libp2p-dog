@@ -1,3 +1,0 @@
-cargo:rerun-if-changed=src/tests
-cargo:rustc-check-cfg=cfg(trybuild_no_target)
-cargo:rustc-check-cfg=cfg(host_os, values("windows"))
