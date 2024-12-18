@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package dog.pb;
+
+message RPC {
+    repeated Tx txs = 1;
+}
+
+message Tx {
+    bytes from = 1;
+    bytes tx_id = 2;
+    bytes data = 3;
+}
