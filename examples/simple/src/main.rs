@@ -46,7 +46,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             _ = &mut sleep => {
                 info!("Sending a transaction");
 
-                swarm.behaviour_mut().dog.publish(format!("transaction #{i} from {}", local_peer_id));
+                match swarm.behaviour_mut().dog.publish(format!("transaction #{i} from {}", local_peer_id)) {
+                    Ok(tx_id) => {
+                        info!("Transaction sent with id {}", tx_id);
+                    }
+                    Err(e) => {
+                        info!("Failed to send transaction: {:?}", e);
+                    }
+                }
 
                 i += 1;
             }

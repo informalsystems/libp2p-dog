@@ -1,144 +1,192 @@
-use std::{io, iter, pin::Pin};
+use std::{future::Future, iter, pin::Pin};
 
-use asynchronous_codec::Framed;
-use bytes::Bytes;
-use futures::{Future, SinkExt, StreamExt};
+use asynchronous_codec::{Decoder, Encoder, Framed};
+use futures::future;
 use libp2p::{
     core::UpgradeInfo,
     futures::{AsyncRead, AsyncWrite},
     InboundUpgrade, OutboundUpgrade, PeerId, StreamProtocol,
 };
+use void::Void;
 
-use crate::proto;
+use crate::{
+    config::ValidationMode,
+    error::ValidationError,
+    handler::HandlerEvent,
+    rpc_proto::proto,
+    types::{ControlAction, HaveTx, RawTransaction, ResetRoute, Rpc, TransactionId},
+};
 
-const MAX_MESSAGE_LEN_BYTES: usize = 2048;
+const DOG_PROTOCOL: &str = "/dog/1.0.0";
+const DEFAULT_MAX_TRANSMIT_SIZE: usize = 65536;
 
-const PROTOCOL_NAME: StreamProtocol = StreamProtocol::new("/dog/1.0.0");
-
-#[derive(Clone, Default)]
-pub struct DogProtocol {}
-
-impl DogProtocol {
-    pub fn new() -> Self {
-        Self {}
-    }
+/// Implementation of [`InboundUpgrade`] and [`OutboundUpgrade`] for the dog protocol.
+#[derive(Debug, Clone)]
+pub struct ProtocolConfig {
+    /// The dog protocol id to listen on.
+    pub(crate) stream_protocol: StreamProtocol,
+    /// The maximum transmit size for a packet.
+    pub(crate) max_transmit_size: usize,
+    /// Determines the level of validation to perform on incoming transactions.
+    pub(crate) validation_mode: ValidationMode,
 }
 
-impl UpgradeInfo for DogProtocol {
-    type Info = StreamProtocol;
-    type InfoIter = iter::Once<Self::Info>;
-
-    fn protocol_info(&self) -> Self::InfoIter {
-        iter::once(PROTOCOL_NAME)
-    }
-}
-
-impl<TSocket> InboundUpgrade<TSocket> for DogProtocol
-where
-    TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
-{
-    type Output = DogRpc;
-    type Error = DogError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
-
-    fn upgrade_inbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
-        Box::pin(async move {
-            let mut framed = Framed::new(
-                socket,
-                quick_protobuf_codec::Codec::<proto::RPC>::new(MAX_MESSAGE_LEN_BYTES),
-            );
-
-            let rpc = framed
-                .next()
-                .await
-                .ok_or_else(|| DogError::ReadError(io::ErrorKind::UnexpectedEof.into()))?
-                .map_err(CodecError)?;
-
-            let mut transactions = Vec::with_capacity(rpc.txs.len());
-            for tx in rpc.txs {
-                transactions.push(DogTransaction {
-                    from: PeerId::from_bytes(&tx.from).map_err(|_| DogError::InvalidPeerId)?,
-                    tx_id: tx.tx_id.into(),
-                    data: tx.data.into(),
-                })
-            }
-
-            Ok(DogRpc { transactions })
-        })
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum DogError {
-    /// Error when parsing the `PeerId` in the message.
-    #[error("Failed to decode PeerId from message")]
-    InvalidPeerId,
-    /// Error when decoding the raw buffer into a protobuf.
-    #[error("Failed to decode protobuf")]
-    ProtobufError(#[from] CodecError),
-    /// Error when reading the packet from the socket.
-    #[error("Failed to read from socket")]
-    ReadError(#[from] io::Error),
-}
-
-#[derive(thiserror::Error, Debug)]
-#[error(transparent)]
-pub struct CodecError(#[from] quick_protobuf_codec::Error);
-
-#[derive(Debug)]
-pub struct DogRpc {
-    pub transactions: Vec<DogTransaction>,
-}
-
-impl UpgradeInfo for DogRpc {
-    type Info = StreamProtocol;
-    type InfoIter = iter::Once<Self::Info>;
-
-    fn protocol_info(&self) -> Self::InfoIter {
-        iter::once(PROTOCOL_NAME)
-    }
-}
-
-impl<TSocket> OutboundUpgrade<TSocket> for DogRpc
-where
-    TSocket: AsyncWrite + AsyncRead + Send + Unpin + 'static,
-{
-    type Output = ();
-    type Error = CodecError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
-
-    fn upgrade_outbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
-        Box::pin(async move {
-            let mut framed = Framed::new(
-                socket,
-                quick_protobuf_codec::Codec::<proto::RPC>::new(MAX_MESSAGE_LEN_BYTES),
-            );
-            framed.send(self.into_rpc()).await?;
-            framed.close().await?;
-            Ok(())
-        })
-    }
-}
-
-impl DogRpc {
-    fn into_rpc(self) -> proto::RPC {
-        proto::RPC {
-            txs: self
-                .transactions
-                .into_iter()
-                .map(|tx| proto::Tx {
-                    from: tx.from.to_bytes().into(),
-                    tx_id: tx.tx_id.into(),
-                    data: tx.data.to_vec().into(),
-                })
-                .collect(),
+impl Default for ProtocolConfig {
+    fn default() -> Self {
+        Self {
+            stream_protocol: StreamProtocol::new(DOG_PROTOCOL),
+            max_transmit_size: DEFAULT_MAX_TRANSMIT_SIZE,
+            validation_mode: ValidationMode::Strict,
         }
     }
 }
 
-#[derive(Debug, Clone, Hash)]
-pub struct DogTransaction {
-    pub from: PeerId,
-    pub tx_id: Vec<u8>,
-    pub data: Bytes,
+impl UpgradeInfo for ProtocolConfig {
+    type Info = StreamProtocol;
+    type InfoIter = iter::Once<Self::Info>;
+
+    fn protocol_info(&self) -> Self::InfoIter {
+        iter::once(self.stream_protocol.clone())
+    }
+}
+
+impl<TSocket> InboundUpgrade<TSocket> for ProtocolConfig
+where
+    TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+{
+    type Output = Framed<TSocket, DogCodec>;
+    type Error = Void; // TODO: change to Infallible with next rust-libp2p release
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_inbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
+        Box::pin(future::ok(Framed::new(
+            socket,
+            DogCodec::new(self.max_transmit_size, self.validation_mode),
+        )))
+    }
+}
+
+impl<TSocket> OutboundUpgrade<TSocket> for ProtocolConfig
+where
+    TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+{
+    type Output = Framed<TSocket, DogCodec>;
+    type Error = Void; // TODO: change to Infallible with next rust-libp2p release
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_outbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
+        Box::pin(future::ok(Framed::new(
+            socket,
+            DogCodec::new(self.max_transmit_size, self.validation_mode),
+        )))
+    }
+}
+
+/// Dog codec for the framing
+pub struct DogCodec {
+    /// Determines the level of validation to perform on incoming transactions.
+    validation_mode: ValidationMode,
+    /// The codec to handle common encoding/decoding of the protobuf messages.
+    codec: quick_protobuf_codec::Codec<proto::RPC>,
+}
+
+impl DogCodec {
+    pub fn new(max_length: usize, validation_mode: ValidationMode) -> DogCodec {
+        let codec = quick_protobuf_codec::Codec::new(max_length);
+        DogCodec {
+            validation_mode,
+            codec,
+        }
+    }
+}
+
+impl Encoder for DogCodec {
+    type Item<'a> = proto::RPC;
+    type Error = quick_protobuf_codec::Error;
+
+    fn encode(
+        &mut self,
+        item: Self::Item<'_>,
+        dst: &mut bytes::BytesMut,
+    ) -> Result<(), Self::Error> {
+        self.codec.encode(item, dst)
+    }
+}
+
+impl Decoder for DogCodec {
+    type Item = HandlerEvent;
+    type Error = quick_protobuf_codec::Error;
+
+    fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        let Some(rpc) = self.codec.decode(src)? else {
+            return Ok(None);
+        };
+
+        let mut transactions = Vec::with_capacity(rpc.txs.len());
+        let mut invalid_transactions = Vec::new();
+
+        for transaction in rpc.txs.into_iter() {
+            // TODO: Implement all the validation logic here.
+            let mut verify_source = true;
+
+            match self.validation_mode {
+                ValidationMode::Strict => {
+                    verify_source = true;
+                }
+                ValidationMode::None => {}
+            }
+
+            let source = if verify_source {
+                match PeerId::from_bytes(&transaction.from) {
+                    Ok(peer_id) => peer_id,
+                    Err(_) => {
+                        invalid_transactions.push((
+                            RawTransaction {
+                                from: PeerId::random(),
+                                seqno: transaction.seqno,
+                                data: transaction.data,
+                            },
+                            ValidationError::InvalidPeerId,
+                        ));
+                        continue;
+                    }
+                }
+            } else {
+                // TODO: Temporary solution to showcase the validation logic.
+                PeerId::random()
+            };
+
+            transactions.push(RawTransaction {
+                from: source,
+                seqno: transaction.seqno,
+                data: transaction.data,
+            })
+        }
+
+        let mut control_msgs = Vec::new();
+
+        if let Some(control) = rpc.control {
+            let have_tx_msgs = control.have_tx.into_iter().map(|have_tx| {
+                ControlAction::HaveTx(HaveTx {
+                    tx_id: TransactionId::from(have_tx.tx_id),
+                })
+            });
+
+            let reset_route_msgs = control
+                .reset_route
+                .into_iter()
+                .map(|_| ControlAction::ResetRoute(ResetRoute {}));
+
+            control_msgs.extend(have_tx_msgs);
+            control_msgs.extend(reset_route_msgs);
+        }
+
+        Ok(Some(HandlerEvent::Transaction {
+            rpc: Rpc {
+                transactions,
+                control_msgs,
+            },
+            invalid_transactions,
+        }))
+    }
 }

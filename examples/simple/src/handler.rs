@@ -13,15 +13,13 @@ use crate::{
 
 async fn handle_identify_event(
     event: identify::Event,
-    swarm: &mut swarm::Swarm<MyBehaviour>,
+    _swarm: &mut swarm::Swarm<MyBehaviour>,
     _config: &Config,
     state: &mut State,
 ) {
     match event {
         identify::Event::Received { peer_id, info, .. } => {
             info!("Received identify info from {}", peer_id);
-
-            swarm.behaviour_mut().dog.add_target_peer(peer_id);
 
             state.peers.insert(peer_id, info);
         }
@@ -33,14 +31,20 @@ async fn handle_identify_event(
 }
 
 async fn handle_dog_event(
-    event: libp2p_dog::DogEvent,
+    event: libp2p_dog::Event,
     _swarm: &mut swarm::Swarm<MyBehaviour>,
     _config: &Config,
     state: &mut State,
 ) {
     match event {
-        libp2p_dog::DogEvent::Transaction(transaction) => {
-            info!("Received transaction: {:?}", transaction);
+        libp2p_dog::Event::Transaction { transaction, .. } => {
+            info!(
+                "Received transaction: {}",
+                match String::from_utf8(transaction.data.clone()) {
+                    Ok(data) => data,
+                    Err(_) => "Invalid UTF-8".to_string(),
+                }
+            );
 
             state.transactions_received.push(transaction);
         }

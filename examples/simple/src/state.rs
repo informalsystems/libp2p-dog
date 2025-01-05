@@ -1,12 +1,12 @@
 use crate::config::Config;
 use libp2p::{identify::Info, PeerId};
-use libp2p_dog::DogTransaction;
+use libp2p_dog::Transaction;
 use std::collections::HashMap;
 
 #[derive(Debug)]
 pub(crate) struct State {
     pub peers: HashMap<PeerId, Info>,
-    pub transactions_received: Vec<DogTransaction>,
+    pub transactions_received: Vec<Transaction>,
 }
 
 impl State {

@@ -3,11 +3,23 @@ syntax = "proto3";
 package dog.pb;
 
 message RPC {
-    repeated Tx txs = 1;
+    repeated Transaction txs = 1;
+    ControlMessage control = 2;
 }
 
-message Tx {
+message Transaction {
     bytes from = 1;
-    bytes tx_id = 2;
+    uint64 seqno = 2;
     bytes data = 3;
 }
+
+message ControlMessage {
+    repeated ControlHaveTx have_tx = 1;
+    repeated ControlResetRoute reset_route = 2;
+}
+
+message ControlHaveTx {
+    bytes tx_id = 1;
+}
+
+message ControlResetRoute {}
