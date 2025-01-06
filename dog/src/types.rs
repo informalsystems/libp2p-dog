@@ -1,5 +1,5 @@
 use futures_timer::Delay;
-use libp2p::{swarm::ConnectionId, PeerId};
+use libp2p::{identity::ParseError, swarm::ConnectionId, PeerId};
 
 use crate::{rpc::Sender, rpc_proto::proto};
 
@@ -49,6 +49,7 @@ pub struct RawTransaction {
     /// The content of the transaction.
     pub data: Vec<u8>,
     // TODO: plus some other fields such as signature, etc.
+    // TODO: carry history of reached peers?
 }
 
 impl From<RawTransaction> for proto::Transaction {
@@ -85,13 +86,23 @@ pub enum ControlAction {
 
 #[derive(Debug, Clone)]
 pub struct HaveTx {
-    pub tx_id: TransactionId,
+    pub from: PeerId,
+}
+
+impl TryFrom<proto::ControlHaveTx> for HaveTx {
+    type Error = ParseError;
+
+    fn try_from(have_tx: proto::ControlHaveTx) -> Result<Self, Self::Error> {
+        PeerId::from_bytes(&have_tx.from)
+            .map(|from| HaveTx { from })
+            .map_err(|err| err)
+    }
 }
 
 impl From<HaveTx> for proto::ControlHaveTx {
     fn from(have_tx: HaveTx) -> Self {
         proto::ControlHaveTx {
-            tx_id: have_tx.tx_id.0,
+            from: have_tx.from.to_bytes(),
         }
     }
 }

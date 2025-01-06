@@ -1,5 +1,6 @@
 mod behaviour;
 mod config;
+mod dog;
 mod error;
 mod handler;
 pub mod protocol;

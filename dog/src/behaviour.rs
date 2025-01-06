@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
+    num::NonZeroUsize,
     task::Poll,
     time::SystemTime,
 };
@@ -12,14 +13,20 @@ use libp2p::{
     },
     PeerId,
 };
+use lru::LruCache;
+use rand::seq::IteratorRandom;
 
 use crate::{
     config::Config,
+    dog::{Controller, Router},
     error::PublishError,
     handler::{Handler, HandlerEvent, HandlerIn},
     rpc::Sender,
     transform::{DataTransform, IdentityTransform},
-    types::{ControlAction, PeerConnections, RawTransaction, RpcOut, Transaction, TransactionId},
+    types::{
+        ControlAction, HaveTx, PeerConnections, RawTransaction, ResetRoute, RpcOut, Transaction,
+        TransactionId,
+    },
 };
 
 /// Determines if published transaction should be signed or not.
@@ -31,12 +38,6 @@ pub enum TransactionAuthenticity {
     /// Transaction signing is disabled. The specified [`PeerId`] will be used as the author
     /// of all published transactions. The sequence number will be randomized.
     Author(PeerId),
-}
-
-impl TransactionAuthenticity {
-    // pub fn is_signing(&self) -> bool {
-    //     matches!(self, TransactionAuthenticity::Signed(_))
-    // }
 }
 
 /// Event that can be emitted by the dog behaviour.
@@ -93,14 +94,13 @@ impl SequenceNumber {
     }
 }
 
-// impl PublishConfig {
-//     pub(crate) fn get_own_id(&self) -> Option<&PeerId> {
-//         match self {
-//             // Self::Signing { author, .. } => Some(author),
-//             Self::Author { author, .. } => Some(author),
-//         }
-//     }
-// }
+impl PublishConfig {
+    pub(crate) fn get_own_id(&self) -> PeerId {
+        match self {
+            Self::Author { author, .. } => *author,
+        }
+    }
+}
 
 impl From<TransactionAuthenticity> for PublishConfig {
     fn from(authenticity: TransactionAuthenticity) -> Self {
@@ -126,6 +126,9 @@ pub struct Behaviour<D = IdentityTransform> {
     data_transform: D,
     connected_peers: HashMap<PeerId, PeerConnections>,
     redundancy_interval: Delay,
+    redundancy_controller: Controller,
+    router: Router,
+    cache: LruCache<TransactionId, ()>,
 }
 
 impl<D> Behaviour<D>
@@ -157,6 +160,9 @@ where
             data_transform,
             connected_peers: HashMap::new(),
             redundancy_interval: Delay::new(config.redundancy_interval()),
+            redundancy_controller: Controller::new(&config),
+            router: Router::new(),
+            cache: LruCache::new(NonZeroUsize::new(config.cache_size()).unwrap()),
             config,
         })
     }
@@ -183,12 +189,19 @@ where
             data,
         });
 
-        // TODO: check for duplicates, etc.
+        if self.cache.contains(&tx_id) {
+            tracing::warn!(transaction=%tx_id, "Not publishing a transaction that has already been published");
+            return Err(PublishError::Duplicate);
+        }
 
         tracing::trace!("Publishing transaction");
 
-        // TODO: change to specific fanout peers
-        let recipient_peers = self.connected_peers.keys().cloned().collect::<Vec<_>>();
+        self.cache.put(tx_id.clone(), ());
+
+        let recipient_peers = self.router.filter_valid_routes(
+            self.publish_config.get_own_id(),
+            self.connected_peers.keys().cloned().collect::<Vec<_>>(),
+        );
 
         let mut publish_failed = true;
         for peer_id in &recipient_peers {
@@ -253,18 +266,20 @@ where
         &mut self,
         transaction_id: &TransactionId,
         raw_transaction: RawTransaction,
-        propagation_source: Option<&PeerId>,
+        propagation_source: &PeerId,
     ) -> bool {
         tracing::debug!(transaction=%transaction_id, "Forwarding transaction");
 
-        // TODO: choose recipients based on DOG routing
-
-        let recipient_peers = self
-            .connected_peers
-            .keys()
-            .filter(|&&peer_id| Some(&peer_id) != propagation_source)
-            .cloned()
-            .collect::<Vec<_>>();
+        // TODO: should remove peers that already received the transaction
+        // TODO: see RawTransaction TODOs
+        let recipient_peers = self.router.filter_valid_routes(
+            raw_transaction.from,
+            self.connected_peers
+                .keys()
+                .filter(|&peer| peer != propagation_source)
+                .cloned()
+                .collect::<Vec<_>>(),
+        );
 
         if recipient_peers.is_empty() {
             return false;
@@ -285,8 +300,11 @@ where
         true
     }
 
-    fn on_connection_established(&mut self, ConnectionEstablished { .. }: ConnectionEstablished) {
-        // TODO: nothing to do for now
+    fn on_connection_established(
+        &mut self,
+        ConnectionEstablished { peer_id, .. }: ConnectionEstablished,
+    ) {
+        tracing::debug!(peer=%peer_id, "New peer connected");
     }
 
     fn on_connection_closed(
@@ -303,10 +321,11 @@ where
                 peer.connections.retain(|&id| id != connection_id);
             }
         } else {
-            // TODO: reset DOG routes to this peer
+            tracing::debug!(peer=%peer_id, "Peer disconnected");
 
-            // Remove the peer
+            self.router.reset_routes_with_peer(peer_id);
             self.connected_peers.remove(&peer_id);
+            self.adjust_redundancy();
         }
     }
 
@@ -331,9 +350,29 @@ where
 
         // TODO: validate transaction if needed
 
-        // TODO: do DOG stuff to check duplicates, etc.
+        if self.cache.put(tx_id.clone(), ()).is_some() {
+            tracing::debug!(transaction=%tx_id, "Transaction already received, ignoring");
 
-        // TODO: don't deliver if we already have it
+            self.redundancy_controller.incr_duplicate_txs_count();
+
+            if self.redundancy_controller.is_have_tx_blocked() {
+                return;
+            }
+
+            tracing::debug!(peer=%propagation_source, "Sending HaveTx to peer");
+
+            self.send_transaction(
+                *propagation_source,
+                RpcOut::HaveTx(HaveTx {
+                    from: transaction.from,
+                }),
+            );
+
+            self.redundancy_controller.block_have_tx();
+            return;
+        }
+        self.redundancy_controller.incr_first_time_txs_count();
+
         tracing::debug!("Deliver received transaction to user");
         self.events
             .push_back(ToSwarm::GenerateEvent(Event::Transaction {
@@ -342,7 +381,7 @@ where
                 transaction,
             }));
 
-        self.forward_transaction(&tx_id, raw_transaction, Some(propagation_source));
+        self.forward_transaction(&tx_id, raw_transaction, propagation_source);
     }
 
     fn handle_invalid_transaction(
@@ -354,16 +393,47 @@ where
         // TODO: nothing to do for now
     }
 
-    fn handle_have_tx(&mut self, _tx_ids: Vec<TransactionId>, _propagation_source: &PeerId) {
-        // TODO: nothing to do for now
+    fn handle_have_tx(&mut self, froms: Vec<PeerId>, propagation_source: &PeerId) {
+        tracing::debug!(peer=%propagation_source, "Disabling {} routes to peer", froms.len());
+
+        for from in froms {
+            self.router.disable_route(from, *propagation_source);
+        }
     }
 
-    fn handle_reset_route(&mut self, _propagation_source: &PeerId) {
-        // TODO: nothing to do for now
+    fn handle_reset_route(&mut self, propagation_source: &PeerId) {
+        tracing::debug!(peer=%propagation_source, "Re-enabling a random route to peer");
+
+        match self.router.enable_random_route_to_peer(*propagation_source) {
+            Some(route) => {
+                tracing::debug!(peer=%propagation_source, "Re-enabled route {} to peer", route);
+            }
+            None => {
+                tracing::warn!(peer=%propagation_source, "No route to re-enable to peer");
+            }
+        }
     }
 
     fn adjust_redundancy(&mut self) {
         tracing::debug!("Adjusting redundancy");
+
+        if self.redundancy_controller.evaluate() {
+            tracing::warn!("Redundancy is too low. Sending reset route");
+
+            let mut rng = rand::thread_rng();
+            match self.connected_peers.keys().choose(&mut rng) {
+                Some(peer_id) => {
+                    tracing::trace!(peer=%peer_id, "Sending reset route to peer");
+                    self.send_transaction(*peer_id, RpcOut::ResetRoute(ResetRoute {}));
+                }
+                None => {
+                    // This should not happen
+                    tracing::warn!("No peers to send reset route to");
+                }
+            };
+        }
+
+        self.redundancy_controller.reset_counters();
     }
 }
 
@@ -451,20 +521,20 @@ where
                 }
 
                 // Handle control messages
-                let mut have_tx_ids = Vec::new();
+                let mut have_tx_froms = Vec::new();
                 let mut reset_route = false;
                 for control_msg in rpc.control_msgs {
                     match control_msg {
                         ControlAction::HaveTx(have_tx) => {
-                            have_tx_ids.push(have_tx.tx_id);
+                            have_tx_froms.push(have_tx.from);
                         }
                         ControlAction::ResetRoute(_) => {
                             reset_route = true;
                         }
                     }
                 }
-                if !have_tx_ids.is_empty() {
-                    self.handle_have_tx(have_tx_ids, &propagation_source);
+                if !have_tx_froms.is_empty() {
+                    self.handle_have_tx(have_tx_froms, &propagation_source);
                 }
                 if reset_route {
                     self.handle_reset_route(&propagation_source);
@@ -490,6 +560,7 @@ where
             return Poll::Ready(event);
         }
 
+        // TODO: the check might be first priority and be done before the event check
         if self.redundancy_interval.poll_unpin(cx).is_ready() {
             self.adjust_redundancy();
             self.redundancy_interval

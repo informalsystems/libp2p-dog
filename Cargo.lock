@@ -1464,6 +1464,7 @@ dependencies = [
  "futures-timer",
  "hex_fmt",
  "libp2p",
+ "lru",
  "quick-protobuf",
  "quick-protobuf-codec",
  "rand",

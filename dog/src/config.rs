@@ -21,6 +21,9 @@ pub struct Config {
     transaction_id_fn: Arc<dyn Fn(&Transaction) -> TransactionId + Send + Sync + 'static>,
     max_transactions_per_rpc: Option<usize>,
     connection_handler_queue_len: usize,
+    cache_size: usize,
+    target_redundancy: f64,
+    redundancy_delta_percent: u8,
     redundancy_interval: Duration,
     connection_handler_publish_duration: Duration,
     connection_handler_forward_duration: Duration,
@@ -46,6 +49,21 @@ impl Config {
     /// The maximum number of messages a `ConnectionHandler` can buffer. The default is 5000.
     pub fn connection_handler_queue_len(&self) -> usize {
         self.connection_handler_queue_len
+    }
+
+    /// The size of the cache for the `TransactionId`. The default is 1000.
+    pub fn cache_size(&self) -> usize {
+        self.cache_size
+    }
+
+    /// The target redundancy for the network. The default is 1.0.
+    pub fn target_redundancy(&self) -> f64 {
+        self.target_redundancy
+    }
+
+    /// The percentage of the target redundancy that the network can deviate from. The default is 10.
+    pub fn redundancy_delta_percent(&self) -> u8 {
+        self.redundancy_delta_percent
     }
 
     /// Time between each redundancy adjustment (default is 1 second).
@@ -97,6 +115,9 @@ impl Default for ConfigBuilder {
                 }),
                 max_transactions_per_rpc: None,
                 connection_handler_queue_len: 5000,
+                cache_size: 1000,
+                target_redundancy: 1.0,
+                redundancy_delta_percent: 10,
                 redundancy_interval: Duration::from_secs(1),
                 connection_handler_publish_duration: Duration::from_secs(5),
                 connection_handler_forward_duration: Duration::from_secs(1),
@@ -135,6 +156,24 @@ impl ConfigBuilder {
         connection_handler_queue_len: usize,
     ) -> &mut Self {
         self.config.connection_handler_queue_len = connection_handler_queue_len;
+        self
+    }
+
+    /// The size of the cache for the `TransactionId`. The default is 1000.
+    pub fn cache_size(&mut self, cache_size: usize) -> &mut Self {
+        self.config.cache_size = cache_size;
+        self
+    }
+
+    /// The target redundancy for the network. The default is 1.0.
+    pub fn target_redundancy(&mut self, target_redundancy: f64) -> &mut Self {
+        self.config.target_redundancy = target_redundancy;
+        self
+    }
+
+    /// The percentage of the target redundancy that the network can deviate from. The default is 10.
+    pub fn redundancy_delta_percent(&mut self, redundancy_delta_percent: u8) -> &mut Self {
+        self.config.redundancy_delta_percent = redundancy_delta_percent;
         self
     }
 

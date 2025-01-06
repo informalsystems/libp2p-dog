@@ -14,7 +14,7 @@ use crate::{
     error::ValidationError,
     handler::HandlerEvent,
     rpc_proto::proto,
-    types::{ControlAction, HaveTx, RawTransaction, ResetRoute, Rpc, TransactionId},
+    types::{ControlAction, RawTransaction, ResetRoute, Rpc},
 };
 
 const DOG_PROTOCOL: &str = "/dog/1.0.0";
@@ -166,11 +166,14 @@ impl Decoder for DogCodec {
         let mut control_msgs = Vec::new();
 
         if let Some(control) = rpc.control {
-            let have_tx_msgs = control.have_tx.into_iter().map(|have_tx| {
-                ControlAction::HaveTx(HaveTx {
-                    tx_id: TransactionId::from(have_tx.tx_id),
-                })
-            });
+            let have_tx_msgs =
+                control
+                    .have_tx
+                    .into_iter()
+                    .filter_map(|have_tx| match have_tx.try_into() {
+                        Ok(have_tx) => Some(ControlAction::HaveTx(have_tx)),
+                        Err(_) => None,
+                    });
 
             let reset_route_msgs = control
                 .reset_route
