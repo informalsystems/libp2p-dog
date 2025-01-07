@@ -5,7 +5,7 @@ use rand::seq::IteratorRandom;
 
 use crate::Config;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub struct Route {
     source: PeerId,
     target: PeerId,

@@ -1,4 +1,4 @@
-name: Rust CI
+name: Dog CI
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  build:
+  tests:
     runs-on: ubuntu-latest
 
     steps:
