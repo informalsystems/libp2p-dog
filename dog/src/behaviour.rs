@@ -18,7 +18,7 @@ use rand::seq::IteratorRandom;
 
 use crate::{
     config::Config,
-    dog::{Controller, Router},
+    dog::{Controller, Route, Router},
     error::PublishError,
     handler::{Handler, HandlerEvent, HandlerIn},
     rpc::Sender,
@@ -51,6 +51,11 @@ pub enum Event {
         transaction_id: TransactionId,
         /// The transaction itself.
         transaction: Transaction,
+    },
+    /// The router's routes have been updated.
+    RoutingUpdated {
+        /// The current disabled routes.
+        disabled_routes: Vec<Route>,
     },
 }
 
@@ -183,11 +188,13 @@ where
 
         let raw_transaction = self.build_raw_transaction(transformed_data)?;
 
-        let tx_id = self.config.transaction_id(&Transaction {
+        let transaction = Transaction {
             from: raw_transaction.from,
             seqno: raw_transaction.seqno,
             data,
-        });
+        };
+
+        let tx_id = self.config.transaction_id(&transaction);
 
         if self.cache.contains(&tx_id) {
             tracing::warn!(transaction=%tx_id, "Not publishing a transaction that has already been published");
@@ -197,6 +204,15 @@ where
         tracing::trace!("Publishing transaction");
 
         self.cache.put(tx_id.clone(), ());
+
+        if self.config.deliver_own_transactions() {
+            self.events
+                .push_back(ToSwarm::GenerateEvent(Event::Transaction {
+                    propagation_source: self.publish_config.get_own_id(),
+                    transaction_id: tx_id.clone(),
+                    transaction,
+                }));
+        }
 
         let recipient_peers = self.router.filter_valid_routes(
             self.publish_config.get_own_id(),
@@ -323,7 +339,12 @@ where
         } else {
             tracing::debug!(peer=%peer_id, "Peer disconnected");
 
-            self.router.reset_routes_with_peer(peer_id);
+            if !self.router.reset_routes_with_peer(peer_id).is_empty() {
+                self.events
+                    .push_back(ToSwarm::GenerateEvent(Event::RoutingUpdated {
+                        disabled_routes: self.router.get_disabled_routes(),
+                    }));
+            }
             self.connected_peers.remove(&peer_id);
             self.adjust_redundancy();
         }
@@ -399,6 +420,11 @@ where
         for from in froms {
             self.router.disable_route(from, *propagation_source);
         }
+
+        self.events
+            .push_back(ToSwarm::GenerateEvent(Event::RoutingUpdated {
+                disabled_routes: self.router.get_disabled_routes(),
+            }));
     }
 
     fn handle_reset_route(&mut self, propagation_source: &PeerId) {
@@ -407,6 +433,11 @@ where
         match self.router.enable_random_route_to_peer(*propagation_source) {
             Some(route) => {
                 tracing::debug!(peer=%propagation_source, "Re-enabled route {} to peer", route);
+
+                self.events
+                    .push_back(ToSwarm::GenerateEvent(Event::RoutingUpdated {
+                        disabled_routes: self.router.get_disabled_routes(),
+                    }));
             }
             None => {
                 tracing::warn!(peer=%propagation_source, "No route to re-enable to peer");

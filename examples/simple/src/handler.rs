@@ -1,6 +1,5 @@
 use libp2p::{
     core::ConnectedPoint,
-    identify,
     swarm::{self, SwarmEvent},
 };
 use tracing::{info, warn};
@@ -10,25 +9,6 @@ use crate::{
     config::Config,
     state::State,
 };
-
-async fn handle_identify_event(
-    event: identify::Event,
-    _swarm: &mut swarm::Swarm<MyBehaviour>,
-    _config: &Config,
-    state: &mut State,
-) {
-    match event {
-        identify::Event::Received { peer_id, info, .. } => {
-            info!("Received identify info from {}", peer_id);
-
-            state.peers.insert(peer_id, info);
-        }
-        identify::Event::Sent { peer_id, .. } => {
-            info!("Sent identify info to {}", peer_id);
-        }
-        _ => {}
-    }
-}
 
 async fn handle_dog_event(
     event: libp2p_dog::Event,
@@ -47,6 +27,9 @@ async fn handle_dog_event(
             );
 
             state.transactions_received.push(transaction);
+        }
+        libp2p_dog::Event::RoutingUpdated { disabled_routes } => {
+            info!("Updated routing table: {:?}", disabled_routes);
         }
     }
 }
@@ -94,9 +77,6 @@ pub(crate) async fn handle_swarm_event(
     state: &mut State,
 ) {
     match event {
-        SwarmEvent::Behaviour(NetworkEvent::Identify(event)) => {
-            handle_identify_event(event, swarm, config, state).await;
-        }
         SwarmEvent::Behaviour(NetworkEvent::Dog(event)) => {
             handle_dog_event(event, swarm, config, state).await;
         }

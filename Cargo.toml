@@ -2,6 +2,9 @@
 members = [
     "examples/simple",
     "dog",
+
+    # Tests
+    "dog/tests",
 ]
 resolver = "2"
 

@@ -5,22 +5,22 @@ use rand::seq::IteratorRandom;
 
 use crate::Config;
 
-#[derive(Clone)]
-pub(crate) struct Route {
+#[derive(Debug, Clone)]
+pub struct Route {
     source: PeerId,
     target: PeerId,
 }
 
 impl Route {
-    pub(crate) fn new(source: PeerId, target: PeerId) -> Self {
+    pub fn new(source: PeerId, target: PeerId) -> Self {
         Route { source, target }
     }
 
-    pub(crate) fn source(&self) -> &PeerId {
+    pub fn source(&self) -> &PeerId {
         &self.source
     }
 
-    pub(crate) fn target(&self) -> &PeerId {
+    pub fn target(&self) -> &PeerId {
         &self.target
     }
 }
@@ -42,6 +42,10 @@ impl Router {
         }
     }
 
+    pub(crate) fn get_disabled_routes(&self) -> Vec<Route> {
+        self.disabled_routes.clone()
+    }
+
     pub(crate) fn disable_route(&mut self, source: PeerId, target: PeerId) {
         self.disabled_routes.push(Route::new(source, target));
     }
@@ -59,9 +63,17 @@ impl Router {
         None
     }
 
-    pub(crate) fn reset_routes_with_peer(&mut self, peer: PeerId) {
-        self.disabled_routes
-            .retain(|route| route.source() != &peer && route.target() != &peer);
+    pub(crate) fn reset_routes_with_peer(&mut self, peer: PeerId) -> Vec<Route> {
+        let mut removed_routes = Vec::new();
+        self.disabled_routes.retain(|route| {
+            if route.source() == &peer || route.target() == &peer {
+                removed_routes.push(route.clone());
+                false
+            } else {
+                true
+            }
+        });
+        removed_routes
     }
 
     pub(crate) fn filter_valid_routes(&self, source: PeerId, targets: Vec<PeerId>) -> Vec<PeerId> {

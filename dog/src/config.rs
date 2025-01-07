@@ -27,6 +27,7 @@ pub struct Config {
     redundancy_interval: Duration,
     connection_handler_publish_duration: Duration,
     connection_handler_forward_duration: Duration,
+    deliver_own_transactions: bool,
 }
 
 impl Config {
@@ -87,6 +88,11 @@ impl Config {
     pub fn forward_queue_duration(&self) -> Duration {
         self.connection_handler_forward_duration
     }
+
+    /// Whether the node should deliver its own transactions to the user. The default is `false`.
+    pub fn deliver_own_transactions(&self) -> bool {
+        self.deliver_own_transactions
+    }
 }
 
 impl Default for Config {
@@ -121,6 +127,7 @@ impl Default for ConfigBuilder {
                 redundancy_interval: Duration::from_secs(1),
                 connection_handler_publish_duration: Duration::from_secs(5),
                 connection_handler_forward_duration: Duration::from_secs(1),
+                deliver_own_transactions: false,
             },
         }
     }
@@ -209,10 +216,16 @@ impl ConfigBuilder {
         self
     }
 
+    /// Whether the node should deliver its own transactions to the user. The default is `false`.
+    pub fn deliver_own_transactions(&mut self, deliver_own_transactions: bool) -> &mut Self {
+        self.config.deliver_own_transactions = deliver_own_transactions;
+        self
+    }
+
     /// Constructs a `Config` from the parameters set in the builder.
-    pub fn build(self) -> Result<Config, &'static str> {
+    pub fn build(&self) -> Result<Config, &'static str> {
         // TODO: validate config
 
-        Ok(self.config)
+        Ok(self.config.clone())
     }
 }

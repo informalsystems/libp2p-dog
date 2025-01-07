@@ -12,6 +12,7 @@ mod types;
 pub use self::{
     behaviour::{Behaviour, Event, TransactionAuthenticity},
     config::{Config, ConfigBuilder, ValidationMode},
+    dog::Route,
     error::{PublishError, ValidationError},
     transform::{DataTransform, IdentityTransform},
     types::{RawTransaction, Transaction, TransactionId},

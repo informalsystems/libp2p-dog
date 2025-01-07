@@ -64,7 +64,7 @@ impl From<RawTransaction> for proto::Transaction {
 
 /// The transaction sent to the user after a [`RawTransaction`] has been transformed by a
 /// [`crate::transform::DataTransform`].
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct Transaction {
     /// The peer that published the transaction.
     pub from: PeerId,
@@ -72,6 +72,23 @@ pub struct Transaction {
     pub seqno: u64,
     /// The content of the transaction.
     pub data: Vec<u8>,
+}
+
+impl std::fmt::Debug for Transaction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match String::from_utf8(self.data.clone()) {
+            Ok(data) => write!(
+                f,
+                "Transaction {{ from: {}, seqno: {}, data: {} }}",
+                self.from, self.seqno, data
+            ),
+            Err(_) => write!(
+                f,
+                "Transaction {{ from: {}, seqno: {}, data: {:?} }}",
+                self.from, self.seqno, self.data
+            ),
+        }
+    }
 }
 
 /// A control message received by the dog system.
