@@ -11,6 +11,8 @@ message Transaction {
     bytes from = 1;
     uint64 seqno = 2;
     bytes data = 3;
+    bytes signature = 4;
+    bytes key = 5;
 }
 
 message ControlMessage {

@@ -8,12 +8,14 @@ use std::{
 use futures::FutureExt;
 use futures_timer::Delay;
 use libp2p::{
+    identity::Keypair,
     swarm::{
         behaviour::ConnectionEstablished, ConnectionClosed, FromSwarm, NetworkBehaviour, ToSwarm,
     },
     PeerId,
 };
 use lru::LruCache;
+use quick_protobuf::{MessageWrite, Writer};
 use rand::seq::IteratorRandom;
 
 use crate::{
@@ -21,7 +23,9 @@ use crate::{
     dog::{Controller, Route, Router},
     error::PublishError,
     handler::{Handler, HandlerEvent, HandlerIn},
+    protocol::SIGNING_PREFIX,
     rpc::Sender,
+    rpc_proto::proto,
     transform::{DataTransform, IdentityTransform},
     types::{
         ControlAction, HaveTx, PeerConnections, RawTransaction, ResetRoute, RpcOut, Transaction,
@@ -32,11 +36,11 @@ use crate::{
 /// Determines if published transaction should be signed or not.
 #[derive(Debug)]
 pub enum TransactionAuthenticity {
-    // /// Transaction signing is enabled. The author will be the owner of the key and
-    // /// the sequence number will be linearly increasing.
-    // Signed(Keypair),
+    /// Transaction signing is enabled. The author will be the owner of the key and
+    /// the sequence number will be linearly increasing.
+    Signed(Keypair),
     /// Transaction signing is disabled. The specified [`PeerId`] will be used as the author
-    /// of all published transactions. The sequence number will be randomized.
+    /// of all published transactions. The sequence number will be linearly increasing.
     Author(PeerId),
 }
 
@@ -61,12 +65,12 @@ pub enum Event {
 
 // A data structure for storing configuration for publishing transactions.
 enum PublishConfig {
-    // Signing {
-    //     keypair: Keypair,
-    //     author: PeerId,
-    //     inline_key: Option<Vec<u8>>,
-    //     last_seqno: SequenceNumber,
-    // },
+    Signing {
+        keypair: Keypair,
+        author: PeerId,
+        inline_key: Option<Vec<u8>>,
+        last_seqno: SequenceNumber,
+    },
     Author {
         author: PeerId,
         last_seqno: SequenceNumber,
@@ -102,6 +106,7 @@ impl SequenceNumber {
 impl PublishConfig {
     pub(crate) fn get_own_id(&self) -> PeerId {
         match self {
+            Self::Signing { author, .. } => *author,
             Self::Author { author, .. } => *author,
         }
     }
@@ -110,6 +115,26 @@ impl PublishConfig {
 impl From<TransactionAuthenticity> for PublishConfig {
     fn from(authenticity: TransactionAuthenticity) -> Self {
         match authenticity {
+            TransactionAuthenticity::Signed(keypair) => {
+                let public_key = keypair.public();
+                let key_enc = public_key.encode_protobuf();
+                let key = if key_enc.len() <= 42 {
+                    // The public key can be inlined in [`rpc_proto::proto::Transaction::from`], so we
+                    // don't include it specifically in the
+                    // [`rpc_proto::proto::Transaction::key`] field.
+                    None
+                } else {
+                    // Include the protobuf encoding of the public key in the message.
+                    Some(key_enc)
+                };
+
+                PublishConfig::Signing {
+                    keypair,
+                    author: public_key.to_peer_id(),
+                    inline_key: key,
+                    last_seqno: SequenceNumber::new(),
+                }
+            }
             TransactionAuthenticity::Author(author) => PublishConfig::Author {
                 author,
                 last_seqno: SequenceNumber::new(),
@@ -248,6 +273,43 @@ where
 
     fn build_raw_transaction(&mut self, data: Vec<u8>) -> Result<RawTransaction, PublishError> {
         match &mut self.publish_config {
+            PublishConfig::Signing {
+                ref keypair,
+                author,
+                inline_key,
+                last_seqno,
+            } => {
+                let seqno = last_seqno.next();
+
+                let signature = {
+                    let transaction = proto::Transaction {
+                        from: author.to_bytes(),
+                        seqno,
+                        data: data.clone(),
+                        signature: vec![],
+                        key: vec![],
+                    };
+
+                    let mut buf = Vec::with_capacity(transaction.get_size());
+                    let mut writer = Writer::new(&mut buf);
+
+                    transaction
+                        .write_message(&mut writer)
+                        .expect("Encoding to succeed");
+
+                    let mut signature_bytes = SIGNING_PREFIX.to_vec();
+                    signature_bytes.extend_from_slice(&buf);
+                    keypair.sign(&signature_bytes)?
+                };
+
+                Ok(RawTransaction {
+                    from: *author,
+                    seqno,
+                    data,
+                    signature: Some(signature.to_vec()),
+                    key: inline_key.clone(),
+                })
+            }
             PublishConfig::Author { author, last_seqno } => {
                 let seqno = last_seqno.next();
 
@@ -255,6 +317,8 @@ where
                     from: *author,
                     seqno,
                     data,
+                    signature: None,
+                    key: None,
                 })
             }
         }

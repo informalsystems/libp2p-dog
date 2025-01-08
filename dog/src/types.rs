@@ -48,7 +48,10 @@ pub struct RawTransaction {
     pub seqno: u64,
     /// The content of the transaction.
     pub data: Vec<u8>,
-    // TODO: plus some other fields such as signature, etc.
+    /// The signature of the transaction if it is signed.
+    pub signature: Option<Vec<u8>>,
+    /// The public key of the transaction if it is signed.
+    pub key: Option<Vec<u8>>,
     // TODO: carry history of reached peers?
 }
 
@@ -58,6 +61,14 @@ impl From<RawTransaction> for proto::Transaction {
             from: tx.from.to_bytes(),
             seqno: tx.seqno,
             data: tx.data.to_vec(),
+            signature: match tx.signature {
+                Some(sig) => sig.to_vec(),
+                None => vec![],
+            },
+            key: match tx.key {
+                Some(key) => key.to_vec(),
+                None => vec![],
+            },
         }
     }
 }

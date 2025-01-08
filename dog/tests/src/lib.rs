@@ -144,9 +144,7 @@ impl TestNode {
                 .unwrap()
                 .with_behaviour(|key| {
                     libp2p_dog::Behaviour::<IdentityTransform>::new(
-                        libp2p_dog::TransactionAuthenticity::Author(PeerId::from_public_key(
-                            &key.public(),
-                        )),
+                        libp2p_dog::TransactionAuthenticity::Signed(key.clone()),
                         config,
                     )
                     .expect("Failed to create dog behaviour")

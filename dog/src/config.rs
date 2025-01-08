@@ -10,7 +10,7 @@ use crate::{
 pub enum ValidationMode {
     /// This is the default setting. This settings validates all fields of the transaction.
     Strict,
-    /// This setting does not check any fields of the transaction.
+    /// This setting only checks that the author field is valid
     None,
 }
 
@@ -219,6 +219,13 @@ impl ConfigBuilder {
     /// Whether the node should deliver its own transactions to the user. The default is `false`.
     pub fn deliver_own_transactions(&mut self, deliver_own_transactions: bool) -> &mut Self {
         self.config.deliver_own_transactions = deliver_own_transactions;
+        self
+    }
+
+    /// Determines the level of validation used when receiving transactions. See [`ValidationMode`]
+    /// for the available types. the default is `ValidationMode::Strict`.
+    pub fn validation_mode(&mut self, validation_mode: ValidationMode) -> &mut Self {
+        self.config.protocol.validation_mode = validation_mode;
         self
     }
 

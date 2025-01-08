@@ -5,8 +5,10 @@ use futures::future;
 use libp2p::{
     core::UpgradeInfo,
     futures::{AsyncRead, AsyncWrite},
+    identity::PublicKey,
     InboundUpgrade, OutboundUpgrade, PeerId, StreamProtocol,
 };
+use quick_protobuf::Writer;
 use void::Void;
 
 use crate::{
@@ -16,6 +18,8 @@ use crate::{
     rpc_proto::proto,
     types::{ControlAction, RawTransaction, ResetRoute, Rpc},
 };
+
+pub(crate) const SIGNING_PREFIX: &[u8] = b"libp2p-dog:";
 
 const DOG_PROTOCOL: &str = "/dog/1.0.0";
 const DEFAULT_MAX_TRANSMIT_SIZE: usize = 65536;
@@ -98,6 +102,46 @@ impl DogCodec {
             codec,
         }
     }
+
+    fn verify_signature(transaction: &proto::Transaction) -> bool {
+        use quick_protobuf::MessageWrite;
+
+        let peer_id = match PeerId::from_bytes(&transaction.from) {
+            Ok(peer_id) => peer_id,
+            Err(_) => {
+                tracing::warn!("Signature verification failed: invalid peer id");
+                return false;
+            }
+        };
+
+        let public_key = match PublicKey::try_decode_protobuf(&transaction.key) {
+            Ok(key) => key,
+            _ => match PublicKey::try_decode_protobuf(&peer_id.to_bytes()[2..]) {
+                Ok(v) => v,
+                Err(_) => {
+                    tracing::warn!("Signature verification failed: invalid public key");
+                    return false;
+                }
+            },
+        };
+
+        if peer_id != public_key.to_peer_id() {
+            tracing::warn!("Signature verification failed: peer id does not match public key");
+            return false;
+        }
+
+        let mut transaction_sig = transaction.clone();
+        transaction_sig.signature = vec![];
+        transaction_sig.key = vec![];
+        let mut buf = Vec::with_capacity(transaction_sig.get_size());
+        let mut writer = Writer::new(&mut buf);
+        transaction_sig
+            .write_message(&mut writer)
+            .expect("Encoding to succeed");
+        let mut signature_bytes = SIGNING_PREFIX.to_vec();
+        signature_bytes.extend_from_slice(&buf);
+        public_key.verify(&signature_bytes, &transaction.signature)
+    }
 }
 
 impl Encoder for DogCodec {
@@ -126,40 +170,79 @@ impl Decoder for DogCodec {
         let mut invalid_transactions = Vec::new();
 
         for transaction in rpc.txs.into_iter() {
-            // TODO: Implement all the validation logic here.
-            let mut verify_source = true;
+            let mut verify_signature = false;
 
             match self.validation_mode {
                 ValidationMode::Strict => {
-                    verify_source = true;
+                    verify_signature = true;
                 }
                 ValidationMode::None => {}
             }
 
-            let source = if verify_source {
-                match PeerId::from_bytes(&transaction.from) {
-                    Ok(peer_id) => peer_id,
-                    Err(_) => {
-                        invalid_transactions.push((
-                            RawTransaction {
-                                from: PeerId::random(),
-                                seqno: transaction.seqno,
-                                data: transaction.data,
+            // Always verify the author of the transaction
+            let source = match PeerId::from_bytes(&transaction.from) {
+                Ok(peer_id) => peer_id,
+                Err(_) => {
+                    invalid_transactions.push((
+                        RawTransaction {
+                            from: PeerId::random(),
+                            seqno: transaction.seqno,
+                            data: transaction.data,
+                            signature: if transaction.signature.is_empty() {
+                                None
+                            } else {
+                                Some(transaction.signature)
                             },
-                            ValidationError::InvalidPeerId,
-                        ));
-                        continue;
-                    }
+                            key: if transaction.key.is_empty() {
+                                None
+                            } else {
+                                Some(transaction.key)
+                            },
+                        },
+                        ValidationError::InvalidPeerId,
+                    ));
+                    continue;
                 }
-            } else {
-                // TODO: Temporary solution to showcase the validation logic.
-                PeerId::random()
             };
+
+            if verify_signature && !DogCodec::verify_signature(&transaction) {
+                tracing::warn!("Invalid signature for the received transaction");
+
+                invalid_transactions.push((
+                    RawTransaction {
+                        from: source,
+                        seqno: transaction.seqno,
+                        data: transaction.data,
+                        signature: if transaction.signature.is_empty() {
+                            None
+                        } else {
+                            Some(transaction.signature)
+                        },
+                        key: if transaction.key.is_empty() {
+                            None
+                        } else {
+                            Some(transaction.key)
+                        },
+                    },
+                    ValidationError::InvalidSignature,
+                ));
+                continue;
+            }
 
             transactions.push(RawTransaction {
                 from: source,
                 seqno: transaction.seqno,
                 data: transaction.data,
+                signature: if transaction.signature.is_empty() {
+                    None
+                } else {
+                    Some(transaction.signature)
+                },
+                key: if transaction.key.is_empty() {
+                    None
+                } else {
+                    Some(transaction.key)
+                },
             })
         }
 

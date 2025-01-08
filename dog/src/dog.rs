@@ -32,6 +32,7 @@ impl Display for Route {
 }
 
 pub(crate) struct Router {
+    // TODO: is it better to use a HashMap<PeerId, HashSet<PeerId>>?
     disabled_routes: Vec<Route>,
 }
 

@@ -143,7 +143,7 @@ pub async fn n_nodes_aligned() {
 // one of the transactions twice. For example, node 3 will receive the transaction originated from
 // node 1 twice: via node 0 and node 2.
 // We expect all nodes to request one of its neighbors to stop sending transactions that have the
-// corresponding transaction's origin.
+// same origin as the duplicated transaction.
 #[tokio::test]
 pub async fn simple_redundancy() {
     let config = libp2p_dog::ConfigBuilder::default()

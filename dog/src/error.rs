@@ -1,7 +1,11 @@
+use libp2p::identity::SigningError;
+
 #[derive(Debug)]
 pub enum PublishError {
     /// This transaction has already been published.
     Duplicate,
+    /// An error occurred while signing the transaction.
+    SigningError(SigningError),
     /// There were no peers to send this transaction to.
     InsufficientPeers,
     /// The overal transaction was too large.
@@ -34,11 +38,18 @@ impl From<std::io::Error> for PublishError {
     }
 }
 
+impl From<SigningError> for PublishError {
+    fn from(error: SigningError) -> Self {
+        PublishError::SigningError(error)
+    }
+}
+
 #[derive(Debug)]
 pub enum ValidationError {
     /// The PeerId was invalid.
     InvalidPeerId,
-    // TODO: complete with more error types as the development progresses.
+    /// The signature was invalid.
+    InvalidSignature,
 }
 
 impl std::fmt::Display for ValidationError {

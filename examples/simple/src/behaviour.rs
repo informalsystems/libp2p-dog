@@ -1,4 +1,4 @@
-use libp2p::{identity::Keypair, swarm::NetworkBehaviour, PeerId};
+use libp2p::{identity::Keypair, swarm::NetworkBehaviour};
 
 use crate::config::Config;
 
@@ -22,8 +22,13 @@ pub(crate) struct MyBehaviour {
 impl MyBehaviour {
     pub(crate) fn new(_config: &Config, key: &Keypair) -> Self {
         let dog = libp2p_dog::Behaviour::new(
-            libp2p_dog::TransactionAuthenticity::Author(PeerId::from_public_key(&key.public())),
+            libp2p_dog::TransactionAuthenticity::Signed(key.clone()),
             libp2p_dog::Config::default(),
+            // libp2p_dog::TransactionAuthenticity::Author(key.public().to_peer_id()),
+            // libp2p_dog::ConfigBuilder::default()
+            //     .validation_mode(libp2p_dog::ValidationMode::None)
+            //     .build()
+            //     .expect("Failed to create dog behaviour"),
         )
         .expect("Failed to create dog behaviour");
 

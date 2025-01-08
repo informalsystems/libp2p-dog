@@ -55,6 +55,8 @@ pub struct Transaction {
     pub from: Vec<u8>,
     pub seqno: u64,
     pub data: Vec<u8>,
+    pub signature: Vec<u8>,
+    pub key: Vec<u8>,
 }
 
 impl<'a> MessageRead<'a> for Transaction {
@@ -65,6 +67,8 @@ impl<'a> MessageRead<'a> for Transaction {
                 Ok(10) => msg.from = r.read_bytes(bytes)?.to_owned(),
                 Ok(16) => msg.seqno = r.read_uint64(bytes)?,
                 Ok(26) => msg.data = r.read_bytes(bytes)?.to_owned(),
+                Ok(34) => msg.signature = r.read_bytes(bytes)?.to_owned(),
+                Ok(42) => msg.key = r.read_bytes(bytes)?.to_owned(),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -79,12 +83,16 @@ impl MessageWrite for Transaction {
         + if self.from.is_empty() { 0 } else { 1 + sizeof_len((&self.from).len()) }
         + if self.seqno == 0u64 { 0 } else { 1 + sizeof_varint(*(&self.seqno) as u64) }
         + if self.data.is_empty() { 0 } else { 1 + sizeof_len((&self.data).len()) }
+        + if self.signature.is_empty() { 0 } else { 1 + sizeof_len((&self.signature).len()) }
+        + if self.key.is_empty() { 0 } else { 1 + sizeof_len((&self.key).len()) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
         if !self.from.is_empty() { w.write_with_tag(10, |w| w.write_bytes(&**&self.from))?; }
         if self.seqno != 0u64 { w.write_with_tag(16, |w| w.write_uint64(*&self.seqno))?; }
         if !self.data.is_empty() { w.write_with_tag(26, |w| w.write_bytes(&**&self.data))?; }
+        if !self.signature.is_empty() { w.write_with_tag(34, |w| w.write_bytes(&**&self.signature))?; }
+        if !self.key.is_empty() { w.write_with_tag(42, |w| w.write_bytes(&**&self.key))?; }
         Ok(())
     }
 }
