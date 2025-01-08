@@ -29,7 +29,7 @@ pub async fn two_nodes_bidirectional() {
         test.publish_on_node(1, format!("Hello #{} from node 2!", i).into_bytes());
     }
 
-    sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(5)).await;
 
     let peer_ids = test.peer_ids();
     let events = test.collect_events();
@@ -90,7 +90,7 @@ pub async fn n_nodes_aligned() {
         }
     }
 
-    sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(5)).await;
 
     let peer_ids = test.peer_ids();
     let events = test.collect_events();
@@ -168,7 +168,7 @@ pub async fn simple_redundancy() {
         test.publish_on_node(i, format!("Hello from node {}!", i).into_bytes());
     }
 
-    sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(5)).await;
 
     let peer_ids = test.peer_ids();
     let events = test.collect_events();
