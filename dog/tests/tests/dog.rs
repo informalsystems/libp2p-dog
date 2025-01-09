@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use libp2p_dog::Route;
 use libp2p_dog_tests::Test;
 use tokio::time::sleep;
 
@@ -17,7 +16,7 @@ pub async fn two_nodes_bidirectional() {
 
     let bootstrap_sets = [vec![1], vec![0]];
 
-    let mut test = match Test::<2>::new_with_unique_config(config, bootstrap_sets) {
+    let mut test = match Test::<2>::new_with_unique_config(config, bootstrap_sets, true) {
         Ok(test) => test,
         Err(e) => panic!("Failed to create test: {}", e),
     };
@@ -34,9 +33,10 @@ pub async fn two_nodes_bidirectional() {
     let peer_ids = test.peer_ids();
     let events = test.collect_events();
 
+    assert_eq!(peer_ids.len(), 2);
     assert_eq!(events.len(), 2);
 
-    for (i, (transactions, routes)) in events.iter().enumerate() {
+    for (i, (transactions, routing_updates)) in events.iter().enumerate() {
         assert_eq!(transactions.len(), 10);
         let expected = (0..10)
             .map(|j| {
@@ -54,7 +54,7 @@ pub async fn two_nodes_bidirectional() {
             assert_eq!(transaction.data, expected_transaction.data);
         }
 
-        assert_eq!(routes.len(), 0);
+        assert_eq!(routing_updates.len(), 0);
     }
 }
 
@@ -77,7 +77,7 @@ pub async fn n_nodes_aligned() {
         .try_into()
         .unwrap();
 
-    let mut test = match Test::<N>::new_with_unique_config(config, bootstrap_sets) {
+    let mut test = match Test::<N>::new_with_unique_config(config, bootstrap_sets, true) {
         Ok(test) => test,
         Err(e) => panic!("Failed to create test: {}", e),
     };
@@ -95,9 +95,10 @@ pub async fn n_nodes_aligned() {
     let peer_ids = test.peer_ids();
     let events = test.collect_events();
 
+    assert_eq!(peer_ids.len(), N);
     assert_eq!(events.len(), N);
 
-    for (i, (transactions, routes)) in events.iter().enumerate() {
+    for (i, (transactions, routing_updates)) in events.iter().enumerate() {
         assert_eq!(transactions.len(), (N - 1) * 10);
         let mut expected = (0..10)
             .map(|j| {
@@ -114,58 +115,55 @@ pub async fn n_nodes_aligned() {
             .collect::<Vec<_>>();
 
         for transaction in transactions {
-            let index = match expected
-                .iter()
-                .position(|expected| expected.from == transaction.from)
-            {
+            let index = match expected.iter().position(|expected| {
+                expected.from == transaction.from && expected.data == transaction.data
+            }) {
                 Some(index) => index,
-                None => panic!("Wrong transaction: {:?}", transaction),
+                None => panic!("Unexpected transaction: {:?}", transaction),
             };
-            assert_eq!(transaction.data, expected[index].data);
             expected.remove(index);
         }
 
-        assert_eq!(routes.len(), 0);
+        assert_eq!(routing_updates.len(), 0);
     }
 }
 
-// Testing that a node receiving the same transaction from different nodes will request one of them
-// to stop sending it.
-// We consider the following scenario:
-//
-//   1
-//  / \
-// 0   2
-//  \ /
-//   3
-//
-// We start by publishing a single transaction from each node. Consequently, each node will receive
-// one of the transactions twice. For example, node 3 will receive the transaction originated from
-// node 1 twice: via node 0 and node 2.
-// We expect all nodes to request one of its neighbors to stop sending transactions that have the
-// same origin as the duplicated transaction.
+// Testing that a node receiving the same transaction from different nodes will request eventually
+// request all of them except one to stop sending it.
+// We consider a random network of size N with target redundancy set to 0.0.
+// Each node will publish transactions at constant intervals. We expect that after a certain amount
+// of time, the routing status of the network will be stable. Moreover, we expect that, for each
+// transaction, there is a single associated tree-like route from the source (root) to all other
+// nodes (leaves).
 #[tokio::test]
-pub async fn simple_redundancy() {
+pub async fn random_network_no_redundancy() {
     let config = libp2p_dog::ConfigBuilder::default()
-        // We force the nodes to send an have_tx message to stop the redundancy
+        // We force the nodes to remove any redundancy
         .target_redundancy(0.0)
         .redundancy_delta_percent(0)
+        // Speed up have_tx unblocking
+        .redundancy_interval(Duration::from_millis(10))
+        // Disable signature to speed up the test
+        .validation_mode(libp2p_dog::ValidationMode::None)
         .build()
         .unwrap();
 
-    const N: usize = 4;
+    const N: usize = 10;
 
-    let bootstrap_sets: [Vec<usize>; N] = [vec![1, 3], vec![0, 2], vec![1, 3], vec![0, 2]];
+    let bootstrap_sets = Test::<N>::random_network();
 
-    let mut test = match Test::<N>::new_with_unique_config(config, bootstrap_sets) {
+    let mut test = match Test::<N>::new_with_unique_config(config, bootstrap_sets.clone(), false) {
         Ok(test) => test,
         Err(e) => panic!("Failed to create test: {}", e),
     };
 
     test.spawn_all().await;
 
-    for i in 0..N {
-        test.publish_on_node(i, format!("Hello from node {}!", i).into_bytes());
+    for i in 0..(N - 1) * (N - 2) {
+        for j in 0..N {
+            test.publish_on_node(j, format!("Hello #{} from node {}!", i, j).into_bytes());
+        }
+        sleep(Duration::from_millis(100)).await;
     }
 
     sleep(Duration::from_secs(5)).await;
@@ -173,161 +171,94 @@ pub async fn simple_redundancy() {
     let peer_ids = test.peer_ids();
     let events = test.collect_events();
 
+    assert_eq!(peer_ids.len(), N);
     assert_eq!(events.len(), N);
 
     for (i, (transactions, _)) in events.iter().enumerate() {
-        assert_eq!(transactions.len(), N - 1);
-        let expected = (0..N)
-            .filter(|j| *j != i)
-            .map(|j| libp2p_dog::Transaction {
-                from: peer_ids[j],
-                seqno: 0, // ignored
-                data: format!("Hello from node {}!", j).into_bytes(),
+        assert_eq!(transactions.len(), (N - 1) * (N - 2) * (N - 1));
+        let mut expected = (0..(N - 1) * (N - 2))
+            .map(|j| {
+                (0..N)
+                    .filter(|k| *k != i)
+                    .map(|k| libp2p_dog::Transaction {
+                        from: peer_ids[k],
+                        seqno: 0, // ignored
+                        data: format!("Hello #{} from node {}!", j, k).into_bytes(),
+                    })
+                    .collect::<Vec<_>>()
             })
+            .flatten()
             .collect::<Vec<_>>();
 
         for transaction in transactions {
-            let expected_transaction = expected
-                .iter()
-                .find(|expected| expected.from == transaction.from)
-                .unwrap();
-            assert_eq!(transaction.data, expected_transaction.data);
+            let index = match expected.iter().position(|expected| {
+                expected.from == transaction.from && expected.data == transaction.data
+            }) {
+                Some(index) => index,
+                None => panic!("Unexpected transaction: {:?}", transaction),
+            };
+            expected.remove(index);
         }
     }
 
-    let routes_0 = events[0].1.clone();
-    let routes_2 = events[2].1.clone();
+    // Verify that no reset route messages have been sent
+    for (_, routing_updates) in events.iter() {
+        for (j, routes) in routing_updates.iter().enumerate() {
+            if j == 0 {
+                continue;
+            }
 
-    // There should be two routing updates made of a single route
-    assert_eq!(routes_0.len() + routes_2.len(), 2);
+            assert!(routes.len() > routing_updates[j - 1].len());
+        }
+    }
+
+    // Build the directed graph of the network
+    let mut base_adjency_list: Vec<Vec<usize>> = vec![Vec::new(); N];
+    for i in 0..N {
+        for j in bootstrap_sets[i].iter() {
+            base_adjency_list[i].push(*j);
+        }
+    }
 
     let peer_id_to_index = |peer_id: &libp2p::PeerId| -> usize {
         peer_ids.iter().position(|id| id == peer_id).unwrap()
     };
 
-    // There can be two valid behaviours:
-    // 1. Each node has one of the disabled routes, but not the same one.
-    // 2. One node has both disabled routes, which means that there are two events:
-    //    - One with the disabled route from 1 to 3 or from 3 to 1.
-    //    - A second one with the previous route and the inverse one.
-    if routes_0.len() == 2 {
-        assert_eq!(routes_0[0].len(), 1);
-        let first_route = routes_0[0][0];
+    for i in 0..N {
+        let mut i_adjency_list = base_adjency_list.clone();
 
-        assert_eq!(routes_0[1].len(), 2);
-        assert_eq!(routes_0[1][0], first_route);
-        assert_eq!(
-            routes_0[1][1],
-            Route::new(*first_route.target(), *first_route.source())
-        );
-
-        assert!(
-            peer_id_to_index(first_route.source()) == 1
-                || peer_id_to_index(first_route.source()) == 3
-        );
-        if peer_id_to_index(first_route.source()) == 1 {
-            assert_eq!(peer_id_to_index(first_route.target()), 3);
-        } else {
-            assert_eq!(peer_id_to_index(first_route.target()), 1);
+        for (j, (_, routing_updates)) in events.iter().enumerate() {
+            match routing_updates.last() {
+                Some(routes) => {
+                    for route in routes.iter().filter(|r| r.source() == &peer_ids[i]) {
+                        i_adjency_list[j]
+                            .retain(|target| *target != peer_id_to_index(route.target()));
+                    }
+                }
+                None => {
+                    continue;
+                }
+            };
         }
-    } else if routes_2.len() == 2 {
-        assert_eq!(routes_2[0].len(), 1);
-        let first_route = routes_2[0][0];
 
-        assert_eq!(routes_2[1].len(), 2);
-        assert_eq!(routes_2[1][0], first_route);
-        assert_eq!(
-            routes_2[1][1],
-            Route::new(*first_route.target(), *first_route.source())
-        );
-
-        assert!(
-            peer_id_to_index(first_route.source()) == 1
-                || peer_id_to_index(first_route.source()) == 3
-        );
-        if peer_id_to_index(first_route.source()) == 1 {
-            assert_eq!(peer_id_to_index(first_route.target()), 3);
-        } else {
-            assert_eq!(peer_id_to_index(first_route.target()), 1);
+        let mut visited = vec![false; N];
+        let mut stack = vec![(i, i)]; // (node, parent)
+        while let Some((node, parent)) = stack.pop() {
+            visited[node] = true;
+            for neighbor in i_adjency_list[node].iter() {
+                if *neighbor == parent {
+                    // A -> B and B -> A is not considered as a cycle
+                    continue;
+                }
+                if visited[*neighbor] {
+                    panic!("Cycle detected between nodes {} and {}", node, *neighbor);
+                }
+                stack.push((*neighbor, node));
+            }
         }
-    } else {
-        assert_eq!(routes_0.len(), 1);
-        assert_eq!(routes_2.len(), 1);
 
-        let route_0 = routes_0[0][0];
-        let route_2 = routes_2[0][0];
-
-        assert_eq!(route_0.source(), route_2.target());
-        assert_eq!(route_0.target(), route_2.source());
-
-        assert!(peer_id_to_index(route_0.source()) == 1 || peer_id_to_index(route_0.source()) == 3);
-        if peer_id_to_index(route_0.source()) == 1 {
-            assert_eq!(peer_id_to_index(route_0.target()), 3);
-        } else {
-            assert_eq!(peer_id_to_index(route_0.target()), 1);
-        }
-    }
-
-    let routes_1 = events[1].1.clone();
-    let routes_3 = events[3].1.clone();
-
-    assert_eq!(routes_1.len() + routes_3.len(), 2);
-
-    if routes_1.len() == 2 {
-        assert_eq!(routes_1[0].len(), 1);
-        let first_route = routes_1[0][0];
-
-        assert_eq!(routes_1[1].len(), 2);
-        assert_eq!(routes_1[1][0], first_route);
-        assert_eq!(
-            routes_1[1][1],
-            Route::new(*first_route.target(), *first_route.source())
-        );
-
-        assert!(
-            peer_id_to_index(first_route.source()) == 0
-                || peer_id_to_index(first_route.source()) == 2
-        );
-        if peer_id_to_index(first_route.source()) == 0 {
-            assert_eq!(peer_id_to_index(first_route.target()), 2);
-        } else {
-            assert_eq!(peer_id_to_index(first_route.target()), 0);
-        }
-    } else if routes_3.len() == 2 {
-        assert_eq!(routes_3[0].len(), 1);
-        let first_route = routes_3[0][0];
-
-        assert_eq!(routes_3[1].len(), 2);
-        assert_eq!(routes_3[1][0], first_route);
-        assert_eq!(
-            routes_3[1][1],
-            Route::new(*first_route.target(), *first_route.source())
-        );
-
-        assert!(
-            peer_id_to_index(first_route.source()) == 0
-                || peer_id_to_index(first_route.source()) == 2
-        );
-        if peer_id_to_index(first_route.source()) == 0 {
-            assert_eq!(peer_id_to_index(first_route.target()), 2);
-        } else {
-            assert_eq!(peer_id_to_index(first_route.target()), 0);
-        }
-    } else {
-        assert_eq!(routes_1.len(), 1);
-        assert_eq!(routes_3.len(), 1);
-
-        let route_1 = routes_1[0][0];
-        let route_3 = routes_3[0][0];
-
-        assert_eq!(route_1.source(), route_3.target());
-        assert_eq!(route_1.target(), route_3.source());
-
-        assert!(peer_id_to_index(route_1.source()) == 0 || peer_id_to_index(route_1.source()) == 2);
-        if peer_id_to_index(route_1.source()) == 0 {
-            assert_eq!(peer_id_to_index(route_1.target()), 2);
-        } else {
-            assert_eq!(peer_id_to_index(route_1.target()), 0);
+        for visited in visited.iter() {
+            assert!(*visited);
         }
     }
 }

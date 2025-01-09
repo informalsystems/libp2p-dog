@@ -131,6 +131,7 @@ impl DogCodec {
         }
 
         let mut transaction_sig = transaction.clone();
+        // Signature and key fields are not part of the signature
         transaction_sig.signature = vec![];
         transaction_sig.key = vec![];
         let mut buf = Vec::with_capacity(transaction_sig.get_size());

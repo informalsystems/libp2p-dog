@@ -286,6 +286,7 @@ where
                         from: author.to_bytes(),
                         seqno,
                         data: data.clone(),
+                        // Signature and key fields are not included in the signature
                         signature: vec![],
                         key: vec![],
                     };

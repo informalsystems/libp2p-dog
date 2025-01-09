@@ -48,11 +48,13 @@ pub struct RawTransaction {
     pub seqno: u64,
     /// The content of the transaction.
     pub data: Vec<u8>,
+
+    /// FIELDS BELOW ARE NOT PART OF THE SIGNATURE
+
     /// The signature of the transaction if it is signed.
     pub signature: Option<Vec<u8>>,
     /// The public key of the transaction if it is signed.
     pub key: Option<Vec<u8>>,
-    // TODO: carry history of reached peers?
 }
 
 impl From<RawTransaction> for proto::Transaction {
