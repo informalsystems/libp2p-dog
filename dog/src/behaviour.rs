@@ -16,7 +16,6 @@ use libp2p::{
 };
 use lru::LruCache;
 use quick_protobuf::{MessageWrite, Writer};
-use rand::seq::IteratorRandom;
 
 use crate::{
     config::Config,
@@ -447,14 +446,16 @@ where
 
             tracing::debug!(peer=%propagation_source, "Sending HaveTx to peer");
 
-            self.send_transaction(
+            if self.send_transaction(
                 *propagation_source,
                 RpcOut::HaveTx(HaveTx {
                     from: transaction.from,
                 }),
-            );
+            ) {
+                self.router.register_have_tx_sent(*propagation_source);
+                self.redundancy_controller.block_have_tx();
+            }
 
-            self.redundancy_controller.block_have_tx();
             return;
         }
         self.redundancy_controller.incr_first_time_txs_count();
@@ -516,11 +517,12 @@ where
         if self.redundancy_controller.evaluate() {
             tracing::warn!("Redundancy is too low. Sending reset route");
 
-            let mut rng = rand::thread_rng();
-            match self.connected_peers.keys().choose(&mut rng) {
+            match self.router.get_random_have_tx_sent_peer() {
                 Some(peer_id) => {
                     tracing::trace!(peer=%peer_id, "Sending reset route to peer");
-                    self.send_transaction(*peer_id, RpcOut::ResetRoute(ResetRoute {}));
+                    if self.send_transaction(peer_id, RpcOut::ResetRoute(ResetRoute {})) {
+                        self.router.remove_have_tx_sent(&peer_id);
+                    }
                 }
                 None => {
                     // This should not happen

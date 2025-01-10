@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use libp2p::PeerId;
 use rand::seq::IteratorRandom;
@@ -32,14 +32,15 @@ impl Display for Route {
 }
 
 pub(crate) struct Router {
-    // TODO: is it better to use a HashMap<PeerId, HashSet<PeerId>>?
     disabled_routes: Vec<Route>,
+    have_tx_sent_per_peer: HashMap<PeerId, usize>,
 }
 
 impl Router {
     pub(crate) fn new() -> Self {
         Router {
             disabled_routes: Vec::new(),
+            have_tx_sent_per_peer: HashMap::new(),
         }
     }
 
@@ -87,6 +88,27 @@ impl Router {
                     .any(|route| route.source() == &source && route.target() == target)
             })
             .collect()
+    }
+
+    pub(crate) fn register_have_tx_sent(&mut self, peer: PeerId) {
+        let counter = self.have_tx_sent_per_peer.entry(peer).or_insert(0);
+        *counter += 1;
+    }
+
+    // Returns a random peer to which we have sent a have_tx message.
+    pub(crate) fn get_random_have_tx_sent_peer(&self) -> Option<PeerId> {
+        self.have_tx_sent_per_peer
+            .iter()
+            .filter_map(|(peer, count)| if *count > 0 { Some(peer.clone()) } else { None })
+            .choose(&mut rand::thread_rng())
+    }
+
+    pub(crate) fn remove_have_tx_sent(&mut self, peer: &PeerId) {
+        if let Some(counter) = self.have_tx_sent_per_peer.get_mut(peer) {
+            if *counter > 0 {
+                *counter -= 1;
+            }
+        }
     }
 }
 
