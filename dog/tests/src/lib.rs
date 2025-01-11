@@ -10,6 +10,7 @@ use tokio::{sync::mpsc, task::JoinHandle, time::sleep};
 
 pub struct Test<const N: usize> {
     nodes: [TestNode; N],
+    handlers: [Option<JoinHandle<()>>; N],
 }
 
 impl<const N: usize> Test<N> {
@@ -45,8 +46,8 @@ impl<const N: usize> Test<N> {
         bootstrap_sets
     }
 
-    pub fn new_with_unique_config(
-        config: libp2p_dog::Config,
+    pub fn new_with_each_config(
+        configs: [libp2p_dog::Config; N],
         bootstrap_sets: [Vec<usize>; N],
         signed_transactions: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -64,20 +65,48 @@ impl<const N: usize> Test<N> {
                     })
                     .collect();
 
-                TestNode::new(addr, bootstrap_set, config.clone(), signed_transactions).unwrap()
+                TestNode::new(addr, bootstrap_set, configs[i].clone(), signed_transactions).unwrap()
             })
             .collect::<Vec<_>>()
             .try_into()
             .map_err(|_| "Failed to convert Vec to array")?;
 
-        Ok(Self { nodes })
+        Ok(Self {
+            nodes,
+            handlers: [const { None }; N],
+        })
     }
 
-    pub async fn spawn_all(&mut self) -> Vec<JoinHandle<()>> {
-        let join_handlers = self.nodes.iter_mut().map(|node| node.spawn()).collect();
+    pub fn new_with_unique_config(
+        config: libp2p_dog::Config,
+        bootstrap_sets: [Vec<usize>; N],
+        signed_transactions: bool,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let configs = std::array::from_fn(|_| config.clone());
+        Self::new_with_each_config(configs, bootstrap_sets, signed_transactions)
+    }
+
+    pub async fn spawn_all(&mut self) {
+        self.handlers = self
+            .nodes
+            .iter_mut()
+            .map(|node| Some(node.spawn()))
+            .collect::<Vec<Option<JoinHandle<()>>>>()
+            .try_into()
+            .unwrap_or_else(|_| panic!("Failed to convert Vec to array"));
         // Wait for the swarms to initialize and dial each other
         sleep(Duration::from_secs(2)).await;
-        join_handlers
+    }
+
+    pub async fn kill_node(&mut self, node: usize) {
+        assert!(node < N);
+        match &self.handlers[node] {
+            Some(handle) => {
+                handle.abort();
+                self.handlers[node] = None;
+            }
+            None => {}
+        }
     }
 
     pub fn peer_ids(&self) -> [PeerId; N] {

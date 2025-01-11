@@ -28,6 +28,7 @@ pub struct Config {
     connection_handler_publish_duration: Duration,
     connection_handler_forward_duration: Duration,
     deliver_own_transactions: bool,
+    forward_transactions: bool,
 }
 
 impl Config {
@@ -93,6 +94,12 @@ impl Config {
     pub fn deliver_own_transactions(&self) -> bool {
         self.deliver_own_transactions
     }
+
+    /// Whether the node should forward transactions to other peers. The default is `true`.
+    /// This is used if a node just wants to be a "client" in the network.
+    pub fn forward_transactions(&self) -> bool {
+        self.forward_transactions
+    }
 }
 
 impl Default for Config {
@@ -128,6 +135,7 @@ impl Default for ConfigBuilder {
                 connection_handler_publish_duration: Duration::from_secs(5),
                 connection_handler_forward_duration: Duration::from_secs(1),
                 deliver_own_transactions: false,
+                forward_transactions: true,
             },
         }
     }
@@ -219,6 +227,13 @@ impl ConfigBuilder {
     /// Whether the node should deliver its own transactions to the user. The default is `false`.
     pub fn deliver_own_transactions(&mut self, deliver_own_transactions: bool) -> &mut Self {
         self.config.deliver_own_transactions = deliver_own_transactions;
+        self
+    }
+
+    /// Whether the node should forward transactions to other peers. The default is `true`.
+    /// This is used if a node just wants to be a "client" in the network.
+    pub fn forward_transactions(&mut self, forward_transactions: bool) -> &mut Self {
+        self.config.forward_transactions = forward_transactions;
         self
     }
 

@@ -468,7 +468,9 @@ where
                 transaction,
             }));
 
-        self.forward_transaction(&tx_id, raw_transaction, propagation_source);
+        if self.config.forward_transactions() {
+            self.forward_transaction(&tx_id, raw_transaction, propagation_source);
+        }
     }
 
     fn handle_invalid_transaction(
