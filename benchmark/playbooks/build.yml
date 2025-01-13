@@ -1,0 +1,42 @@
+- name: Build benchmark container
+  hosts: "{{ groups['machines'][0] }}"
+
+  tasks:
+    - name: Copy source code to remote machine
+      synchronize:
+        src: "{{ playbook_dir }}/../code"
+        dest: /home/{{ ansible_ssh_user }}
+        mode: push
+        delete: true
+
+    - name: Upload Dockerfile
+      copy:
+        src: "{{ playbook_dir }}/../Dockerfile"
+        dest: /home/{{ ansible_ssh_user }}
+
+    - name: Build container
+      shell: |
+        docker build -t dog-benchmark:latest -f /home/{{ ansible_ssh_user }}/Dockerfile .
+        docker save dog-benchmark:latest > container.tar
+
+    - name: Copy container to local machine
+      synchronize:
+        src: container.tar
+        dest: /tmp
+        mode: pull
+        delete: true
+
+- name: Upload benchmark container
+  hosts: all
+
+  tasks:
+    - name: Copy container to remote machines
+      synchronize:
+        src: /tmp/container.tar
+        dest: /tmp
+        mode: push
+        delete: true
+
+    - name: Load container
+      shell: |
+        docker load < /tmp/container.tar

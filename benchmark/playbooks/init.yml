@@ -1,0 +1,56 @@
+- name: Establish hosts authenticity
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: Establish hosts authenticity
+      become: false
+      shell: |
+        ssh-keygen -R {{ ansible_host }} 2>/dev/null || true
+        ssh-keyscan -t rsa,ecdsa,ed25519 {{ ansible_host }} | grep -v "^#" >> ~/.ssh/known_hosts
+      delegate_to: localhost
+
+- name: Initialize all machines
+  hosts: all
+  become: true
+
+  vars:
+    ansible_ssh_user: root
+
+  tasks:
+    - name: Update APT packages
+      apt:
+        autoclean: true
+        clean: true
+        update_cache: true
+        upgrade: full
+
+    - name: Install SNAP package manager
+      apt:
+        name: snapd
+        state: present
+    
+    - name: Update SNAP packages
+      command: snap refresh
+
+    - name: Create user
+      user:
+        generate_ssh_key: true
+        name: bob
+        shell: /bin/bash
+
+    - name: Add SSH keys to authorized_keys
+      authorized_key:
+        user: bob
+        key: "{{ item }}"
+      with_file:
+        - "{{ playbook_dir }}/../config/ssh-public-keys.txt"
+
+    - name: Install Docker
+      shell: curl -sSL https://get.docker.com/ | sh
+
+    - name: Add user to Docker group
+      user:
+        name: bob
+        groups: docker
+        append: true
