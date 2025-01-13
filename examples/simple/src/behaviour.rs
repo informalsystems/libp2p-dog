@@ -1,4 +1,5 @@
 use libp2p::{identity::Keypair, swarm::NetworkBehaviour};
+use prometheus_client::registry::Registry;
 
 use crate::config::Config;
 
@@ -20,10 +21,11 @@ pub(crate) struct MyBehaviour {
 }
 
 impl MyBehaviour {
-    pub(crate) fn new(_config: &Config, key: &Keypair) -> Self {
-        let dog = libp2p_dog::Behaviour::new(
+    pub(crate) fn new(_config: &Config, key: &Keypair, registry: &mut Registry) -> Self {
+        let dog = libp2p_dog::Behaviour::new_with_metrics(
             libp2p_dog::TransactionAuthenticity::Signed(key.clone()),
             libp2p_dog::Config::default(),
+            registry,
             // libp2p_dog::TransactionAuthenticity::Author(key.public().to_peer_id()),
             // libp2p_dog::ConfigBuilder::default()
             //     .validation_mode(libp2p_dog::ValidationMode::None)

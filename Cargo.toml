@@ -1,7 +1,8 @@
 [workspace]
 members = [
-    "examples/simple",
+    "benchmark/code",
     "dog",
+    "examples/simple",
 
     # Tests
     "dog/tests",
@@ -24,6 +25,7 @@ futures-timer = "3.0.3"
 hex_fmt = "0.3.0"
 libp2p = "0.54.1"
 lru = "0.12.5"
+prometheus-client = "0.23.0"
 quick-protobuf = "0.8.1"
 quick-protobuf-codec = "0.3.1"
 rand = "0.8"

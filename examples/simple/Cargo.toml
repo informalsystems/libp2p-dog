@@ -12,6 +12,7 @@ release = false
 [dependencies]
 libp2p = { workspace = true, features = ["noise", "tcp", "yamux", "tokio", "macros"] }
 libp2p-dog = { path = "../../dog" }
+prometheus-client = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 clap = { version = "4.5.16", features = ["derive"] }
 tracing = { workspace = true }

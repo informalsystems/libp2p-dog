@@ -1,5 +1,6 @@
 use futures_timer::Delay;
 use libp2p::{identity::ParseError, swarm::ConnectionId, PeerId};
+use quick_protobuf::MessageWrite;
 
 use crate::{rpc::Sender, rpc_proto::proto};
 
@@ -55,6 +56,14 @@ pub struct RawTransaction {
     pub signature: Option<Vec<u8>>,
     /// The public key of the transaction if it is signed.
     pub key: Option<Vec<u8>>,
+}
+
+impl RawTransaction {
+    pub fn raw_protobuf_len(&self) -> usize {
+        let transaction: proto::Transaction = self.clone().into();
+
+        transaction.get_size()
+    }
 }
 
 impl From<RawTransaction> for proto::Transaction {

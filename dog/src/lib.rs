@@ -3,6 +3,7 @@ mod config;
 mod dog;
 mod error;
 mod handler;
+mod metrics;
 pub mod protocol;
 mod rpc;
 mod rpc_proto;

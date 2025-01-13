@@ -15,6 +15,7 @@ use libp2p::{
     PeerId,
 };
 use lru::LruCache;
+use prometheus_client::registry::Registry;
 use quick_protobuf::{MessageWrite, Writer};
 
 use crate::{
@@ -22,6 +23,7 @@ use crate::{
     dog::{Controller, Route, Router},
     error::PublishError,
     handler::{Handler, HandlerEvent, HandlerIn},
+    metrics::Metrics,
     protocol::SIGNING_PREFIX,
     rpc::Sender,
     rpc_proto::proto,
@@ -158,6 +160,7 @@ pub struct Behaviour<D = IdentityTransform> {
     redundancy_controller: Controller,
     router: Router,
     cache: LruCache<TransactionId, ()>,
+    metrics: Option<Metrics>,
 }
 
 impl<D> Behaviour<D>
@@ -168,7 +171,15 @@ where
         authenticity: TransactionAuthenticity,
         config: Config,
     ) -> Result<Self, &'static str> {
-        Self::new_with_transform(authenticity, config, D::default())
+        Self::new_with_transform(authenticity, config, None, D::default())
+    }
+
+    pub fn new_with_metrics(
+        authenticity: TransactionAuthenticity,
+        config: Config,
+        metrics: &mut Registry,
+    ) -> Result<Self, &'static str> {
+        Self::new_with_transform(authenticity, config, Some(metrics), D::default())
     }
 }
 
@@ -179,6 +190,7 @@ where
     pub fn new_with_transform(
         authenticity: TransactionAuthenticity,
         config: Config,
+        metrics: Option<&mut Registry>,
         data_transform: D,
     ) -> Result<Self, &'static str> {
         // TODO: validate config
@@ -193,6 +205,7 @@ where
             router: Router::new(),
             cache: LruCache::new(NonZeroUsize::new(config.cache_size()).unwrap()),
             config,
+            metrics: metrics.map(Metrics::new),
         })
     }
 }
@@ -267,6 +280,10 @@ where
 
         tracing::debug!(transaction=%tx_id, "Published transaction");
 
+        if let Some(m) = self.metrics.as_mut() {
+            m.register_published_tx();
+        }
+
         Ok(tx_id)
     }
 
@@ -326,6 +343,12 @@ where
 
     /// Returns `true` if the sending was successful, `false` otherwise.
     fn send_transaction(&mut self, peer_id: PeerId, rpc: RpcOut) -> bool {
+        if let Some(m) = self.metrics.as_mut() {
+            if let RpcOut::Publish { ref tx, .. } | RpcOut::Forward { ref tx, .. } = rpc {
+                m.tx_sent(tx.raw_protobuf_len());
+            }
+        }
+
         let Some(peer) = &mut self.connected_peers.get_mut(&peer_id) else {
             tracing::error!(peer=%peer_id, "Could not send rpc to connection handler, peer doesn't exist in connected peers list");
             return false;
@@ -419,6 +442,10 @@ where
         raw_transaction: RawTransaction,
         propagation_source: &PeerId,
     ) {
+        if let Some(m) = self.metrics.as_mut() {
+            m.tx_recv_unfiltered(raw_transaction.raw_protobuf_len());
+        }
+
         let transaction = match self
             .data_transform
             .inbound_transform(raw_transaction.clone())
@@ -459,6 +486,10 @@ where
             return;
         }
         self.redundancy_controller.incr_first_time_txs_count();
+
+        if let Some(m) = self.metrics.as_mut() {
+            m.tx_recv();
+        }
 
         tracing::debug!("Deliver received transaction to user");
         self.events

@@ -4,7 +4,7 @@ use libp2p::{
     futures::StreamExt, identity::Keypair, swarm::dial_opts::DialOpts, Multiaddr, PeerId,
     SwarmBuilder,
 };
-use libp2p_dog::{IdentityTransform, Route};
+use libp2p_dog::Route;
 use rand::Rng;
 use tokio::{sync::mpsc, task::JoinHandle, time::sleep};
 
@@ -200,30 +200,33 @@ impl TestNode {
         self.tx_publish = Some(tx_publish);
 
         tokio::spawn(async move {
-            let mut swarm = SwarmBuilder::with_existing_identity(keypair)
-                .with_tokio()
-                .with_tcp(
-                    libp2p::tcp::Config::new().nodelay(true), // Disable Nagle's algorithm
-                    libp2p::noise::Config::new,
-                    libp2p::yamux::Config::default,
-                )
-                .unwrap()
-                .with_behaviour(|key| {
-                    libp2p_dog::Behaviour::<IdentityTransform>::new(
-                        if signed_transactions {
-                            libp2p_dog::TransactionAuthenticity::Signed(key.clone())
-                        } else {
-                            libp2p_dog::TransactionAuthenticity::Author(key.public().to_peer_id())
-                        },
-                        config,
+            let mut swarm: libp2p::Swarm<libp2p_dog::Behaviour> =
+                SwarmBuilder::with_existing_identity(keypair)
+                    .with_tokio()
+                    .with_tcp(
+                        libp2p::tcp::Config::new().nodelay(true), // Disable Nagle's algorithm
+                        libp2p::noise::Config::new,
+                        libp2p::yamux::Config::default,
                     )
-                    .expect("Failed to create dog behaviour")
-                })
-                .unwrap()
-                .with_swarm_config(|cfg| {
-                    cfg.with_idle_connection_timeout(std::time::Duration::from_secs(u64::MAX))
-                })
-                .build();
+                    .unwrap()
+                    .with_behaviour(|key| {
+                        libp2p_dog::Behaviour::new(
+                            if signed_transactions {
+                                libp2p_dog::TransactionAuthenticity::Signed(key.clone())
+                            } else {
+                                libp2p_dog::TransactionAuthenticity::Author(
+                                    key.public().to_peer_id(),
+                                )
+                            },
+                            config,
+                        )
+                        .expect("Failed to create dog behaviour")
+                    })
+                    .unwrap()
+                    .with_swarm_config(|cfg| {
+                        cfg.with_idle_connection_timeout(std::time::Duration::from_secs(u64::MAX))
+                    })
+                    .build();
 
             match swarm.listen_on(addr.clone()) {
                 Ok(_) => {}
