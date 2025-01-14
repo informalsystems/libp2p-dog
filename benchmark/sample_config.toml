@@ -1,0 +1,17 @@
+[node]
+id = "node1"
+addr = "/ip4/127.0.0.1/tcp/12345"
+peers = [
+    "/ip4/127.0.0.1/tcp/12346",
+    "/ip4/127.0.0.1/tcp/12347",
+    "/ip4/127.0.0.1/tcp/12348",
+]
+
+[benchmark]
+protocol = "dog"
+start_timestamp_in_sec = 1736850301
+duration_in_sec = 10
+tps = 1
+tx_size_in_bytes = 1024
+dump_interval_in_ms = 2000
+registry_prefix = ""

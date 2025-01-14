@@ -408,6 +408,10 @@ where
         ConnectionEstablished { peer_id, .. }: ConnectionEstablished,
     ) {
         tracing::debug!(peer=%peer_id, "New peer connected");
+
+        if let Some(m) = self.metrics.as_mut() {
+            m.inc_peers_count();
+        }
     }
 
     fn on_connection_closed(
@@ -431,9 +435,17 @@ where
                     .push_back(ToSwarm::GenerateEvent(Event::RoutingUpdated {
                         disabled_routes: self.router.get_disabled_routes(),
                     }));
+
+                if let Some(m) = self.metrics.as_mut() {
+                    m.set_disabled_routes_count(self.router.get_disabled_routes().len());
+                }
             }
             self.connected_peers.remove(&peer_id);
             self.adjust_redundancy();
+
+            if let Some(m) = self.metrics.as_mut() {
+                m.dec_peers_count();
+            }
         }
     }
 
@@ -481,6 +493,10 @@ where
             ) {
                 self.router.register_have_tx_sent(*propagation_source);
                 self.redundancy_controller.block_have_tx();
+
+                if let Some(m) = self.metrics.as_mut() {
+                    m.register_have_tx_sent();
+                }
             }
 
             return;
@@ -510,7 +526,9 @@ where
         _raw_transaction: RawTransaction,
         // rejection_reason: ???
     ) {
-        // TODO: nothing to do for now
+        if let Some(m) = self.metrics.as_mut() {
+            m.register_invalid_tx();
+        }
     }
 
     fn handle_have_tx(&mut self, froms: Vec<PeerId>, propagation_source: &PeerId) {
@@ -524,6 +542,10 @@ where
             .push_back(ToSwarm::GenerateEvent(Event::RoutingUpdated {
                 disabled_routes: self.router.get_disabled_routes(),
             }));
+
+        if let Some(m) = self.metrics.as_mut() {
+            m.set_disabled_routes_count(self.router.get_disabled_routes().len());
+        }
     }
 
     fn handle_reset_route(&mut self, propagation_source: &PeerId) {
@@ -537,6 +559,10 @@ where
                     .push_back(ToSwarm::GenerateEvent(Event::RoutingUpdated {
                         disabled_routes: self.router.get_disabled_routes(),
                     }));
+
+                if let Some(m) = self.metrics.as_mut() {
+                    m.set_disabled_routes_count(self.router.get_disabled_routes().len());
+                }
             }
             None => {
                 tracing::warn!(peer=%propagation_source, "No route to re-enable to peer");
@@ -547,7 +573,8 @@ where
     fn adjust_redundancy(&mut self) {
         tracing::debug!("Adjusting redundancy");
 
-        if self.redundancy_controller.evaluate() {
+        let (redundancy, send_reset_route) = self.redundancy_controller.evaluate();
+        if send_reset_route {
             tracing::warn!("Redundancy is too low. Sending reset route");
 
             match self.router.get_random_have_tx_sent_peer() {
@@ -555,6 +582,10 @@ where
                     tracing::trace!(peer=%peer_id, "Sending reset route to peer");
                     if self.send_transaction(peer_id, RpcOut::ResetRoute(ResetRoute {})) {
                         self.router.remove_have_tx_sent(&peer_id);
+
+                        if let Some(m) = self.metrics.as_mut() {
+                            m.register_reset_route_sent();
+                        }
                     }
                 }
                 None => {
@@ -562,6 +593,10 @@ where
                     tracing::warn!("No peers to send reset route to");
                 }
             };
+        }
+
+        if let Some(m) = self.metrics.as_mut() {
+            m.set_redundancy(redundancy);
         }
 
         self.redundancy_controller.reset_counters();
@@ -672,12 +707,20 @@ where
                 }
             }
             HandlerEvent::TransactionDropped(rpc) => {
-                // TODO: record metrics
                 tracing::warn!(
                     peer=%propagation_source,
                     "Dropped transaction from peer. Transaction: {:?}",
                     rpc
                 );
+
+                if let Some(m) = self.metrics.as_mut() {
+                    match rpc {
+                        RpcOut::Publish { .. } => m.register_published_tx_dropped(),
+                        RpcOut::Forward { .. } => m.register_forwarded_tx_dropped(),
+                        _ => {}
+                    }
+                    m.register_timedout_tx_dropped();
+                }
             }
         }
     }

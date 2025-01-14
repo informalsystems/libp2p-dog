@@ -160,22 +160,22 @@ impl Controller {
 
     /// Evaluate the redundancy, unblock have_tx if necessary, and return whether
     /// we should send a reset route message.
-    pub(crate) fn evaluate(&mut self) -> bool {
+    pub(crate) fn evaluate(&mut self) -> (f64, bool) {
         // Do not evaluate redundancy if no transactions have been received from the
         // last evaluation.
         if self.first_time_txs_count + self.duplicate_txs_count == 0 {
-            return false;
+            return (self.upper_bound, false);
         }
         let redundancy = self.redundancy();
         // We do not have enough redundancy, so we request a reset route.
         if redundancy < self.lower_bound {
-            return true;
+            return (redundancy, true);
         }
         // We have too much redundancy, so we unblock have_tx.
         if redundancy > self.upper_bound {
             self.is_have_tx_blocked = false;
         }
-        false
+        (redundancy, false)
     }
 
     pub(crate) fn reset_counters(&mut self) {

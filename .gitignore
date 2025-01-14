@@ -1,3 +1,4 @@
+benchmark/*.json
 benchmark/config/*
 !benchmark/config/README.md
 target

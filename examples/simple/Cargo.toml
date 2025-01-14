@@ -10,13 +10,13 @@ license = "Apache-2.0"
 release = false
 
 [dependencies]
+clap = { workspace = true, features = ["derive"] }
 libp2p = { workspace = true, features = ["noise", "tcp", "yamux", "tokio", "macros"] }
 libp2p-dog = { path = "../../dog" }
 prometheus-client = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-clap = { version = "4.5.16", features = ["derive"] }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [lints]
 workspace = true
