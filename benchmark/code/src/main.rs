@@ -52,13 +52,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let transaction_timer = time::sleep(Duration::from_secs(u64::MAX)); // Wait for start timestamp
     tokio::pin!(transaction_timer);
 
-    let start_instant =
-        time::Instant::now() + Duration::from_secs(config.benchmark.start_timestamp_in_sec);
-
-    let stop_instant = time::Instant::now()
-        + Duration::from_secs(
-            config.benchmark.start_timestamp_in_sec + config.benchmark.duration_in_sec,
+    let start_instant = time::Instant::now()
+        + Duration::from_millis(
+            args.start_timestamp
+                .saturating_sub(std::time::UNIX_EPOCH.elapsed()?.as_millis() as u64),
         );
+
+    tracing::info!(
+        "Starting benchmark in {:?}",
+        start_instant - time::Instant::now(),
+    );
+
+    let stop_instant = start_instant + Duration::from_secs(config.benchmark.duration_in_sec);
 
     let dump_interval = Duration::from_millis(config.benchmark.dump_interval_in_ms);
     let dump_timer = time::sleep(Duration::from_secs(u64::MAX)); // Wait for start timestamp

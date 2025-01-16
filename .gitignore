@@ -1,4 +1,8 @@
+benchmark/machines.txt
+benchmark/benchmark.conf
+benchmark/inventory.ini
 benchmark/*.json
+benchmark/output
 benchmark/config/*
 !benchmark/config/README.md
 target

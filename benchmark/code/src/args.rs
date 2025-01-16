@@ -7,6 +7,9 @@ pub(crate) struct Args {
 
     #[arg(short, long)]
     pub config: String,
+
+    #[arg(short, long)]
+    pub start_timestamp: u64,
 }
 
 impl Args {

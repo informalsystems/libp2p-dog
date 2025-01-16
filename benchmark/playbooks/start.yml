@@ -1,0 +1,32 @@
+- name: Start the join benchmark
+  hosts: all
+
+  tasks:
+    - name: Delete previous outputs
+      shell: rm -rf {{ playbook_dir }}/../output/*
+      delegate_to: localhost
+      run_once: true
+
+    - name: Get UTC timestamp
+      command: "gdate -u +%s%3N"
+      register: timestamp_output
+      delegate_to: localhost
+      run_once: true
+
+    - name: Execute benchmark
+      shell: |
+        mkdir -p /home/{{ ansible_user }}/output
+        rm -rf /home/{{ ansible_user }}/output/*
+        docker run --rm --network host \
+          -v /home/{{ ansible_user }}/config:/config \
+          -v /home/{{ ansible_user }}/output:/output \
+          -w /app \
+          dog-benchmark:latest /bin/bash -c \
+          "benchmark --dir /output --config /config/node.toml --start-timestamp {{ (timestamp_output.stdout | int) + 10000 }} > /output/benchmark.log 2>&1"
+
+    - name: Copy benchmark output to local machine
+      synchronize:
+        src: /home/{{ ansible_user }}/output
+        dest: "{{ playbook_dir }}/../output/output-{{ inventory_hostname }}"
+        mode: pull
+        delete: true

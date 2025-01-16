@@ -1,0 +1,24 @@
+- name: Delete old config
+  hosts: all
+
+  vars:
+    ansible_ssh_user: root
+
+  tasks:
+    - name: Delete old config
+      shell: rm -rf /home/bob/config
+
+- name: Export configuration
+  hosts: all
+
+  vars:
+    playbook_dir: "{{ playbook_dir | default(playbook_dir | dirname) }}"
+
+  tasks:
+    - name: Create config directory
+      shell: mkdir -p /home/bob/config
+
+    - name: Export configuration
+      copy:
+        src: "{{ playbook_dir }}/../config/node-{{ inventory_hostname }}.toml"
+        dest: /home/bob/config/node.toml

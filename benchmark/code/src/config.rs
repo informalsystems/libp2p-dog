@@ -40,7 +40,6 @@ pub(crate) struct Node {
 #[derive(Deserialize)]
 pub(crate) struct Benchmark {
     pub protocol: Protocol,
-    pub start_timestamp_in_sec: u64,
     pub duration_in_sec: u64,
     pub tps: u64,
     pub tx_size_in_bytes: usize,

@@ -11,7 +11,14 @@ release = false
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-libp2p = { workspace = true, features = ["noise", "tcp", "yamux", "tokio", "macros", "gossipsub"] }
+libp2p = { workspace = true, features = [
+  "noise",
+  "tcp",
+  "yamux",
+  "tokio",
+  "macros",
+  "gossipsub",
+] }
 libp2p-dog = { path = "../../dog" }
 prometheus-client = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

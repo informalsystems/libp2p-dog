@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "benchmark/code",
-    "dog",
-    "examples/simple",
+  "benchmark/code",
+  "dog",
+  "examples/simple",
 
-    # Tests
-    "dog/tests",
+  # Tests
+  "dog/tests",
 ]
 resolver = "2"
 

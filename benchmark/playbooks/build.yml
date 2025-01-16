@@ -4,20 +4,18 @@
   tasks:
     - name: Copy source code to remote machine
       synchronize:
-        src: "{{ playbook_dir }}/../code"
+        src: "{{ playbook_dir }}/../../../libp2p-dog"
         dest: /home/{{ ansible_ssh_user }}
         mode: push
         delete: true
 
-    - name: Upload Dockerfile
-      copy:
-        src: "{{ playbook_dir }}/../Dockerfile"
-        dest: /home/{{ ansible_ssh_user }}
-
     - name: Build container
       shell: |
-        docker build -t dog-benchmark:latest -f /home/{{ ansible_ssh_user }}/Dockerfile .
-        docker save dog-benchmark:latest > container.tar
+        docker build \
+          -t dog-benchmark:latest \
+          -f /home/{{ ansible_ssh_user }}/libp2p-dog/benchmark/Dockerfile \
+          /home/{{ ansible_ssh_user }}/libp2p-dog
+        docker save dog-benchmark:latest > ~/container.tar
 
     - name: Copy container to local machine
       synchronize:
