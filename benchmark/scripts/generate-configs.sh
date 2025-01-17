@@ -65,6 +65,9 @@ generate_node_config() {
   echo "tx_size_in_bytes = ${TX_SIZE}" >> ${output}
   echo "dump_interval_in_ms = ${DUMP_INTERVAL}" >> ${output}
   echo "registry_prefix = \"${REGISTRY_PREFIX}\"" >> ${output}
+  echo "redundancy = ${REDUNDANCY}" >> ${output}
+  echo "redundancy_delta = ${DELTA}" >> ${output}
+  echo "redundancy_interval_in_ms = ${REDUNDANCY_INTERVAL}" >> ${output}
 }
 
 rm -rf ${OUTPUT}/*-*.toml

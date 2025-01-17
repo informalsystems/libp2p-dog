@@ -39,6 +39,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     swarm.listen_on(config.node.addr.clone())?;
 
+    time::sleep(Duration::from_secs(5)).await; // Make sure all other nodes are ready
+
     for peer_addr in &config.node.peers {
         swarm.dial(
             DialOpts::unknown_peer_id()
@@ -73,8 +75,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     loop {
         select! {
-            event = swarm.select_next_some() => {
-                handler::handle_swarm_event(event, &mut swarm, &config).await;
+            _event = swarm.select_next_some() => {
+                // We do not process event when benchmarking to avoid unnecessary overhead
+                #[cfg(feature = "debug")]
+                {
+                    handler::handle_swarm_event(_event, &mut swarm, &config).await;
+                }
             }
 
             _ = time::sleep_until(start_instant), if start_instant > time::Instant::now() => {
@@ -84,7 +90,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             _ = &mut transaction_timer => {
-                tracing::info!("Sending a transaction");
+                tracing::debug!("Sending a transaction");
                 match config.benchmark.protocol {
                     config::Protocol::Dog => {
                         match swarm.behaviour_mut()
@@ -93,7 +99,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .expect("Dog behaviour should be enabled")
                         .publish(vec![0 as u8; config.benchmark.tx_size_in_bytes] as Vec<u8>) {
                             Ok(tx_id) => {
-                                tracing::info!("Transaction sent with id {}", tx_id);
+                                tracing::debug!("Transaction sent with id {}", tx_id);
                             }
                             Err(e) => {
                                 tracing::error!("Failed to send transaction: {:?}", e);
@@ -107,7 +113,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .expect("Gossipsub behaviour should be enabled")
                         .publish(gossipsub_topic.clone(), vec![0 as u8; config.benchmark.tx_size_in_bytes] as Vec<u8>) {
                             Ok(msg_id) => {
-                                tracing::info!("Message sent with id {}", msg_id);
+                                tracing::debug!("Message sent with id {}", msg_id);
                             }
                             Err(e) => {
                                 tracing::error!("Failed to send message: {:?}", e);
@@ -120,7 +126,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             _ = &mut dump_timer => {
-                tracing::info!("Dumping metrics");
+                #[cfg(feature = "debug")]
+                {
+                    tracing::info!("Dumping metrics");
+                }
 
                 if let Err(e) = dump_metrics(&mut writer, &registry) {
                     tracing::error!("Failed to dump metrics: {:?}", e);
@@ -171,6 +180,7 @@ fn dump_metrics(mut writer: impl Write, registry: &Registry) -> Result<(), Box<d
             let metrics = serde_json::Value::Object(metrics);
             serde_json::to_writer(&mut writer, &metrics)?;
             writer.write_all(b",")?;
+            writer.flush()?;
         }
         Err(e) => Err(e)?,
     }

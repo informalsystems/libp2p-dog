@@ -28,5 +28,8 @@ toml = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
+[features]
+debug = []
+
 [lints]
 workspace = true

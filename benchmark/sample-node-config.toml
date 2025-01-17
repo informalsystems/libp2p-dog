@@ -14,3 +14,6 @@ tps = 1
 tx_size_in_bytes = 1024
 dump_interval_in_ms = 2000
 registry_prefix = ""
+redundancy = 1.0
+redundancy_delta = 10
+redundancy_interval_in_ms = 1000

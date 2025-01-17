@@ -3,7 +3,7 @@
 
   tasks:
     - name: Delete previous outputs
-      shell: rm -rf {{ playbook_dir }}/../output/*
+      shell: rm -rf {{ playbook_dir }}/../output/output-*
       delegate_to: localhost
       run_once: true
 
@@ -22,11 +22,11 @@
           -v /home/{{ ansible_user }}/output:/output \
           -w /app \
           dog-benchmark:latest /bin/bash -c \
-          "benchmark --dir /output --config /config/node.toml --start-timestamp {{ (timestamp_output.stdout | int) + 10000 }} > /output/benchmark.log 2>&1"
+          "benchmark --dir /output --config /config/node.toml --start-timestamp {{ (timestamp_output.stdout | int) + 15000 }} > /output/benchmark.log 2>&1"
 
     - name: Copy benchmark output to local machine
       synchronize:
-        src: /home/{{ ansible_user }}/output
-        dest: "{{ playbook_dir }}/../output/output-{{ inventory_hostname }}"
+        src: /home/{{ ansible_user }}/output/
+        dest: "{{ playbook_dir }}/../output/output-{{ inventory_hostname }}/"
         mode: pull
         delete: true

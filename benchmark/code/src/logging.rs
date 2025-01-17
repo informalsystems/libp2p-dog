@@ -3,7 +3,7 @@ use tracing_subscriber::fmt;
 
 pub(crate) fn init() {
     let filter = EnvFilter::builder()
-        .with_default_directive(LevelFilter::DEBUG.into())
+        .with_default_directive(LevelFilter::INFO.into())
         .from_env_lossy();
 
     fmt().with_env_filter(filter).init();

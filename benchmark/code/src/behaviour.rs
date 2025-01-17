@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use libp2p::{
     gossipsub::{self, IdentTopic},
     identity::Keypair,
@@ -9,21 +11,45 @@ use crate::config::{Config, Protocol};
 
 pub(crate) const GOSSIPSUB_TOPIC_STR: &str = "benchmark";
 
+#[cfg(feature = "debug")]
 #[derive(Debug)]
 pub(crate) enum NetworkEvent {
     Dog(libp2p_dog::Event),
     Gossipsub(gossipsub::Event),
 }
 
+#[cfg(not(feature = "debug"))]
+#[derive(Debug)]
+pub(crate) enum NetworkEvent {
+    Dog,
+    Gossipsub,
+}
+
+#[cfg(feature = "debug")]
 impl From<libp2p_dog::Event> for NetworkEvent {
     fn from(event: libp2p_dog::Event) -> Self {
         Self::Dog(event)
     }
 }
 
+#[cfg(not(feature = "debug"))]
+impl From<libp2p_dog::Event> for NetworkEvent {
+    fn from(_: libp2p_dog::Event) -> Self {
+        Self::Dog
+    }
+}
+
+#[cfg(feature = "debug")]
 impl From<gossipsub::Event> for NetworkEvent {
     fn from(event: gossipsub::Event) -> Self {
         Self::Gossipsub(event)
+    }
+}
+
+#[cfg(not(feature = "debug"))]
+impl From<gossipsub::Event> for NetworkEvent {
+    fn from(_: gossipsub::Event) -> Self {
+        Self::Gossipsub
     }
 }
 
@@ -40,7 +66,14 @@ impl Behaviour {
             Toggle::from(Some(
                 libp2p_dog::Behaviour::new_with_metrics(
                     libp2p_dog::TransactionAuthenticity::Signed(key.clone()),
-                    libp2p_dog::Config::default(),
+                    libp2p_dog::ConfigBuilder::default()
+                        .target_redundancy(config.benchmark.redundancy)
+                        .redundancy_delta_percent(config.benchmark.redundancy_delta)
+                        .redundancy_interval(Duration::from_millis(
+                            config.benchmark.redundancy_interval_in_ms,
+                        ))
+                        .build()
+                        .expect("Failed to build dog config"),
                     registry,
                 )
                 .expect("Failed to create dog behaviour"),

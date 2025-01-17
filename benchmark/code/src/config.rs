@@ -45,6 +45,9 @@ pub(crate) struct Benchmark {
     pub tx_size_in_bytes: usize,
     pub dump_interval_in_ms: u64,
     pub registry_prefix: String,
+    pub redundancy: f64,
+    pub redundancy_delta: u8,
+    pub redundancy_interval_in_ms: u64,
 }
 
 impl Config {
