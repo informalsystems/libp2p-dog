@@ -50,28 +50,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )?;
     }
 
-    let transaction_interval = Duration::from_millis(1000 / config.benchmark.tps);
-    let transaction_timer = time::sleep(Duration::from_secs(u64::MAX)); // Wait for start timestamp
-    tokio::pin!(transaction_timer);
-
     let start_instant = time::Instant::now()
         + Duration::from_millis(
             args.start_timestamp
                 .saturating_sub(std::time::UNIX_EPOCH.elapsed()?.as_millis() as u64),
         );
+    let start_timer = time::sleep_until(start_instant);
+    tokio::pin!(start_timer);
 
-    tracing::info!(
-        "Starting benchmark in {:?}",
-        start_instant - time::Instant::now(),
-    );
-
-    let stop_instant = start_instant + Duration::from_secs(config.benchmark.duration_in_sec);
+    let transaction_interval = Duration::from_millis(1000 / config.benchmark.tps);
+    let transaction_timer = time::sleep(Duration::from_secs(u64::MAX)); // Wait for start timestamp
+    tokio::pin!(transaction_timer);
 
     let dump_interval = Duration::from_millis(config.benchmark.dump_interval_in_ms);
     let dump_timer = time::sleep(Duration::from_secs(u64::MAX)); // Wait for start timestamp
     tokio::pin!(dump_timer);
 
+    let stop_instant = start_instant + Duration::from_secs(config.benchmark.duration_in_sec);
+    let stop_timer = time::sleep_until(stop_instant);
+    tokio::pin!(stop_timer);
+
     let gossipsub_topic = IdentTopic::new(GOSSIPSUB_TOPIC_STR);
+
+    tracing::info!(
+        "Starting benchmark in {:?}",
+        start_instant - time::Instant::now(),
+    );
 
     loop {
         select! {
@@ -83,7 +87,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
 
-            _ = time::sleep_until(start_instant), if start_instant > time::Instant::now() => {
+            _ = &mut start_timer, if !start_timer.is_elapsed() => {
                 tracing::info!("Benchmark started");
                 transaction_timer.as_mut().reset(time::Instant::now() + transaction_interval);
                 dump_timer.as_mut().reset(time::Instant::now() + dump_interval);
@@ -138,7 +142,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 dump_timer.as_mut().reset(time::Instant::now() + Duration::from_millis(config.benchmark.dump_interval_in_ms));
             }
 
-            _ = time::sleep_until(stop_instant) => {
+            _ = &mut stop_timer => {
                 break;
             }
         }
@@ -148,6 +152,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     writer.seek(std::io::SeekFrom::End(-1))?; // Remove trailing comma
     writer.write_all(b"]}")?;
+    writer.flush()?;
 
     Ok(())
 }
