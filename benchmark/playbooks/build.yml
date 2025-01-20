@@ -17,14 +17,14 @@
     - name: Copy dog directory to remote machine
       synchronize:
         src: "{{ playbook_dir }}/../../../libp2p-dog/dog"
-        dest: /home/{{ ansible_ssh_user }}/libp2p-dog/dog
+        dest: /home/{{ ansible_ssh_user }}/libp2p-dog/
         mode: push
         delete: true
 
     - name: Copy benchmark code directory to remote machine
       synchronize:
         src: "{{ playbook_dir }}/../../../libp2p-dog/benchmark/code"
-        dest: /home/{{ ansible_ssh_user }}/libp2p-dog/benchmark/code
+        dest: /home/{{ ansible_ssh_user }}/libp2p-dog/benchmark/
         mode: push
         delete: true
 
@@ -32,6 +32,13 @@
       synchronize:
         src: "{{ playbook_dir }}/../../../libp2p-dog/benchmark/Dockerfile"
         dest: /home/{{ ansible_ssh_user }}/libp2p-dog/benchmark/Dockerfile
+        mode: push
+        delete: true
+
+    - name: Copy examples (needed due to workspace dependencies)
+      synchronize:
+        src: "{{ playbook_dir }}/../../../libp2p-dog/examples"
+        dest: /home/{{ ansible_ssh_user }}/libp2p-dog/
         mode: push
         delete: true
 
