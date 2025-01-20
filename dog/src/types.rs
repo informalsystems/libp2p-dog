@@ -205,6 +205,23 @@ impl From<RpcOut> for proto::RPC {
     }
 }
 
+impl std::fmt::Display for RpcOut {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RpcOut::Publish { tx, .. } => {
+                write!(f, "Publish {{ from: {}, seqno: {} }}", tx.from, tx.seqno)
+            }
+            RpcOut::Forward { tx, .. } => {
+                write!(f, "Forward {{ from: {}, seqno: {} }}", tx.from, tx.seqno)
+            }
+            RpcOut::HaveTx(have_tx) => write!(f, "HaveTx {{ have_tx: {:?} }}", have_tx),
+            RpcOut::ResetRoute(reset_route) => {
+                write!(f, "ResetRoute {{ reset_route: {:?} }}", reset_route)
+            }
+        }
+    }
+}
+
 /// An RPC received/sent.
 #[derive(Debug)]
 pub struct Rpc {

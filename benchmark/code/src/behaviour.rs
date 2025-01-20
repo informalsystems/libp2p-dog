@@ -11,6 +11,8 @@ use crate::config::{Config, Protocol};
 
 pub(crate) const GOSSIPSUB_TOPIC_STR: &str = "benchmark";
 
+const MAX_TRANSMIT_SIZE: usize = 4 * 1024 * 1024; // 4 MiB
+
 #[cfg(feature = "debug")]
 #[derive(Debug)]
 pub(crate) enum NetworkEvent {
@@ -72,6 +74,7 @@ impl Behaviour {
                         .redundancy_interval(Duration::from_millis(
                             config.benchmark.redundancy_interval_in_ms,
                         ))
+                        .max_transmit_size(MAX_TRANSMIT_SIZE)
                         .build()
                         .expect("Failed to build dog config"),
                     registry,
@@ -86,7 +89,10 @@ impl Behaviour {
             Toggle::from({
                 let mut behaviour = gossipsub::Behaviour::new_with_metrics(
                     gossipsub::MessageAuthenticity::Signed(key.clone()),
-                    gossipsub::Config::default(),
+                    gossipsub::ConfigBuilder::default()
+                        .max_transmit_size(MAX_TRANSMIT_SIZE)
+                        .build()
+                        .expect("Failed to build gossipsub config"),
                     registry,
                     Default::default(),
                 )

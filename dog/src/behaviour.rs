@@ -709,7 +709,7 @@ where
             HandlerEvent::TransactionDropped(rpc) => {
                 tracing::warn!(
                     peer=%propagation_source,
-                    "Dropped transaction from peer. Transaction: {:?}",
+                    "Dropped transaction from peer. Transaction: {}",
                     rpc
                 );
 

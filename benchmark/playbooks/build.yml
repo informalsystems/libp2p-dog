@@ -2,10 +2,36 @@
   hosts: "{{ groups['machines'][0] }}"
 
   tasks:
-    - name: Copy source code to remote machine
+    - name: Create directories
+      shell: |
+        mkdir -p /home/{{ ansible_ssh_user }}/libp2p-dog
+        mkdir -p /home/{{ ansible_ssh_user }}/libp2p-dog/benchmark
+
+    - name: Copy Cargo.toml to remote machine
       synchronize:
-        src: "{{ playbook_dir }}/../../../libp2p-dog"
-        dest: /home/{{ ansible_ssh_user }}
+        src: "{{ playbook_dir }}/../../../libp2p-dog/Cargo.toml"
+        dest: /home/{{ ansible_ssh_user }}/libp2p-dog/Cargo.toml
+        mode: push
+        delete: true
+
+    - name: Copy dog directory to remote machine
+      synchronize:
+        src: "{{ playbook_dir }}/../../../libp2p-dog/dog"
+        dest: /home/{{ ansible_ssh_user }}/libp2p-dog/dog
+        mode: push
+        delete: true
+
+    - name: Copy benchmark code directory to remote machine
+      synchronize:
+        src: "{{ playbook_dir }}/../../../libp2p-dog/benchmark/code"
+        dest: /home/{{ ansible_ssh_user }}/libp2p-dog/benchmark/code
+        mode: push
+        delete: true
+
+    - name: Copy Dockerfile to remote machine
+      synchronize:
+        src: "{{ playbook_dir }}/../../../libp2p-dog/benchmark/Dockerfile"
+        dest: /home/{{ ansible_ssh_user }}/libp2p-dog/benchmark/Dockerfile
         mode: push
         delete: true
 
