@@ -75,6 +75,8 @@ impl Behaviour {
                             config.benchmark.redundancy_interval_in_ms,
                         ))
                         .max_transmit_size(MAX_TRANSMIT_SIZE)
+                        .connection_handler_publish_duration(Duration::from_secs(10))
+                        .connection_handler_forward_duration(Duration::from_secs(10))
                         .build()
                         .expect("Failed to build dog config"),
                     registry,
@@ -91,6 +93,8 @@ impl Behaviour {
                     gossipsub::MessageAuthenticity::Signed(key.clone()),
                     gossipsub::ConfigBuilder::default()
                         .max_transmit_size(MAX_TRANSMIT_SIZE)
+                        .publish_queue_duration(Duration::from_secs(10))
+                        .forward_queue_duration(Duration::from_secs(10))
                         .build()
                         .expect("Failed to build gossipsub config"),
                     registry,
