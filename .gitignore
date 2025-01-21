@@ -6,4 +6,5 @@ benchmark/output/output-*
 benchmark/output/*.html
 benchmark/config/*
 !benchmark/config/README.md
+!benchmark/config/ntp.conf
 target

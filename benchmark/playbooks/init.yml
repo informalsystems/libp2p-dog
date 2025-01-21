@@ -54,3 +54,37 @@
         name: bob
         groups: docker
         append: true
+
+    - name: Install NTP and utils
+      apt:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - ntp
+        - util-linux-extra
+        - sntp
+
+    - name: Upload NTP configuration
+      copy:
+        src: "{{ playbook_dir }}/../config/ntp.conf"
+        dest: /etc/ntpsec/ntp.conf
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Stop NTP service
+      service:
+        name: ntp
+        state: stopped
+
+    - name: Synchronize manually
+      command: sntp ntp1.hetzner.de
+
+    - name: Enable and restart NTP service
+      service:
+        name: ntp
+        enabled: true
+        state: restarted
+
+    - name: Update hardware clock
+      command: hwclock --systohc

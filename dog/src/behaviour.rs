@@ -379,7 +379,7 @@ where
             raw_transaction.from,
             self.connected_peers
                 .keys()
-                .filter(|&peer| peer != propagation_source)
+                .filter(|&peer| peer != propagation_source && peer != &raw_transaction.from)
                 .cloned()
                 .collect::<Vec<_>>(),
         );
