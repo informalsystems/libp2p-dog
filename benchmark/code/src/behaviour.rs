@@ -13,45 +13,21 @@ pub(crate) const GOSSIPSUB_TOPIC_STR: &str = "benchmark";
 
 const MAX_TRANSMIT_SIZE: usize = 4 * 1024 * 1024; // 4 MiB
 
-#[cfg(feature = "debug")]
 #[derive(Debug)]
 pub(crate) enum NetworkEvent {
     Dog(libp2p_dog::Event),
     Gossipsub(gossipsub::Event),
 }
 
-#[cfg(not(feature = "debug"))]
-#[derive(Debug)]
-pub(crate) enum NetworkEvent {
-    Dog,
-    Gossipsub,
-}
-
-#[cfg(feature = "debug")]
 impl From<libp2p_dog::Event> for NetworkEvent {
     fn from(event: libp2p_dog::Event) -> Self {
         Self::Dog(event)
     }
 }
 
-#[cfg(not(feature = "debug"))]
-impl From<libp2p_dog::Event> for NetworkEvent {
-    fn from(_: libp2p_dog::Event) -> Self {
-        Self::Dog
-    }
-}
-
-#[cfg(feature = "debug")]
 impl From<gossipsub::Event> for NetworkEvent {
     fn from(event: gossipsub::Event) -> Self {
         Self::Gossipsub(event)
-    }
-}
-
-#[cfg(not(feature = "debug"))]
-impl From<gossipsub::Event> for NetworkEvent {
-    fn from(_: gossipsub::Event) -> Self {
-        Self::Gossipsub
     }
 }
 

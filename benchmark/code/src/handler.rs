@@ -1,57 +1,61 @@
-#[cfg(feature = "debug")]
 use libp2p::{
     gossipsub,
     swarm::{self, SwarmEvent},
 };
 
-#[cfg(feature = "debug")]
 use crate::{
     behaviour::{self, NetworkEvent},
     config::Config,
+    metrics::Metrics,
 };
 
-#[cfg(feature = "debug")]
 async fn handle_dog_event(
     event: libp2p_dog::Event,
     _swarm: &mut swarm::Swarm<behaviour::Behaviour>,
     _config: &Config,
+    metrics: &mut Metrics,
 ) {
-    tracing::info!("Dog event: {:?}", event);
+    match event {
+        libp2p_dog::Event::Transaction { transaction_id, .. } => {
+            metrics.add_delivered(
+                transaction_id.0,
+                std::time::UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+            );
+        }
+        _ => {}
+    }
 }
 
-#[cfg(feature = "debug")]
 async fn handle_gossipsub_event(
     event: gossipsub::Event,
     _swarm: &mut swarm::Swarm<behaviour::Behaviour>,
     _config: &Config,
+    metrics: &mut Metrics,
 ) {
-    tracing::info!("Gossipsub event: {:?}", event);
+    match event {
+        gossipsub::Event::Message { message_id, .. } => {
+            metrics.add_delivered(
+                message_id.0,
+                std::time::UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+            );
+        }
+        _ => {}
+    }
 }
 
-#[cfg(feature = "debug")]
-async fn handle_swarm_specific_event(
-    event: SwarmEvent<behaviour::NetworkEvent>,
-    _swarm: &mut swarm::Swarm<behaviour::Behaviour>,
-    _config: &Config,
-) {
-    tracing::info!("Swarm event: {:?}", event);
-}
-
-#[cfg(feature = "debug")]
 pub(crate) async fn handle_swarm_event(
     event: SwarmEvent<behaviour::NetworkEvent>,
     swarm: &mut swarm::Swarm<behaviour::Behaviour>,
     config: &Config,
+    metrics: &mut Metrics,
 ) {
     match event {
         SwarmEvent::Behaviour(NetworkEvent::Dog(event)) => {
-            handle_dog_event(event, swarm, config).await;
+            handle_dog_event(event, swarm, config, metrics).await;
         }
         SwarmEvent::Behaviour(NetworkEvent::Gossipsub(event)) => {
-            handle_gossipsub_event(event, swarm, config).await;
+            handle_gossipsub_event(event, swarm, config, metrics).await;
         }
-        _ => {
-            handle_swarm_specific_event(event, swarm, config).await;
-        }
+        _ => {}
     }
 }

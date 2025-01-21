@@ -8,6 +8,7 @@ use std::{
 
 use behaviour::GOSSIPSUB_TOPIC_STR;
 use libp2p::{futures::StreamExt, gossipsub::IdentTopic, swarm::dial_opts::DialOpts};
+use metrics::Metrics;
 use prometheus_client::{encoding::text::encode, registry::Registry};
 use tokio::{select, time};
 
@@ -16,7 +17,10 @@ mod behaviour;
 mod config;
 mod handler;
 mod logging;
+mod metrics;
 mod swarm;
+
+const STOP_DELAY_IN_SEC: u64 = 5;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -30,6 +34,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ref prefix if prefix.is_empty() => Registry::default(),
         prefix => Registry::with_prefix(prefix),
     };
+
+    let mut metrics = Metrics::new();
 
     let file = fs::File::create(format!("{}/{}.json", args.dir, config.node.id))?;
     let mut writer = std::io::BufWriter::new(&file);
@@ -66,11 +72,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let dump_timer = time::sleep(Duration::from_secs(u64::MAX)); // Wait for start timestamp
     tokio::pin!(dump_timer);
 
-    let stop_instant = start_instant + Duration::from_secs(config.benchmark.duration_in_sec);
+    let stop_instant = start_instant
+        + Duration::from_secs(config.benchmark.duration_in_sec)
+        + Duration::from_secs(STOP_DELAY_IN_SEC);
     let stop_timer = time::sleep_until(stop_instant);
     tokio::pin!(stop_timer);
 
     let gossipsub_topic = IdentTopic::new(GOSSIPSUB_TOPIC_STR);
+
+    let total_transactions = config.benchmark.tps * config.benchmark.duration_in_sec;
+    let mut num_transactions: u64 = 0;
 
     tracing::info!(
         "Starting benchmark in {:?}",
@@ -79,12 +90,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     loop {
         select! {
-            _event = swarm.select_next_some() => {
-                // We do not process event when benchmarking to avoid unnecessary overhead
-                #[cfg(feature = "debug")]
-                {
-                    handler::handle_swarm_event(_event, &mut swarm, &config).await;
-                }
+            event = swarm.select_next_some() => {
+                handler::handle_swarm_event(event, &mut swarm, &config, &mut metrics).await;
             }
 
             _ = &mut start_timer, if !start_timer.is_elapsed() => {
@@ -93,8 +100,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 dump_timer.as_mut().reset(time::Instant::now() + dump_interval);
             }
 
-            _ = &mut transaction_timer => {
+            _ = &mut transaction_timer, if num_transactions < total_transactions => {
                 tracing::debug!("Sending a transaction");
+                let timestamp = std::time::UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+
                 match config.benchmark.protocol {
                     config::Protocol::Dog => {
                         match swarm.behaviour_mut()
@@ -104,6 +113,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .publish(vec![0 as u8; config.benchmark.tx_size_in_bytes] as Vec<u8>) {
                             Ok(tx_id) => {
                                 tracing::debug!("Transaction sent with id {}", tx_id);
+
+                                metrics.add_published(tx_id.0, timestamp);
                             }
                             Err(e) => {
                                 tracing::error!("Failed to send transaction: {:?}", e);
@@ -118,6 +129,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .publish(gossipsub_topic.clone(), vec![0 as u8; config.benchmark.tx_size_in_bytes] as Vec<u8>) {
                             Ok(msg_id) => {
                                 tracing::debug!("Message sent with id {}", msg_id);
+
+                                metrics.add_published(msg_id.0, timestamp);
                             }
                             Err(e) => {
                                 tracing::error!("Failed to send message: {:?}", e);
@@ -127,6 +140,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
 
                 transaction_timer.as_mut().reset(time::Instant::now() + transaction_interval);
+                num_transactions += 1;
             }
 
             _ = &mut dump_timer => {
@@ -135,7 +149,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     tracing::info!("Dumping metrics");
                 }
 
-                if let Err(e) = dump_metrics(&mut writer, &registry) {
+                if let Err(e) = dump_metrics(&mut writer, &registry, &metrics) {
                     tracing::error!("Failed to dump metrics: {:?}", e);
                 }
 
@@ -154,27 +168,41 @@ async fn main() -> Result<(), Box<dyn Error>> {
     writer.write_all(b"]}")?;
     writer.flush()?;
 
+    metrics.dump_metrics(
+        format!("{}/published_{}.json", args.dir, config.node.id),
+        format!("{}/delivered_{}.json", args.dir, config.node.id),
+    )?;
+
     Ok(())
 }
 
-fn dump_metrics(mut writer: impl Write, registry: &Registry) -> Result<(), Box<dyn Error>> {
+fn dump_metrics(
+    mut writer: impl Write,
+    registry: &Registry,
+    metrics: &Metrics,
+) -> Result<(), Box<dyn Error>> {
     let mut output = String::new();
     match encode(&mut output, &registry) {
         Ok(()) => {
-            let mut metrics = serde_json::Map::new();
+            let mut metrics_map = serde_json::Map::new();
 
-            metrics.insert(
+            metrics_map.insert(
                 "timestamp".to_string(),
                 serde_json::Value::Number(serde_json::Number::from(
                     std::time::UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
                 )),
             );
 
+            metrics_map.insert(
+                "total_delivered".to_string(),
+                serde_json::Value::Number(serde_json::Number::from(metrics.total_delivered())),
+            );
+
             for line in output.lines() {
                 if !line.starts_with('#') {
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     if parts.len() == 2 {
-                        metrics.insert(
+                        metrics_map.insert(
                             parts[0].to_string(),
                             parts[1].parse::<serde_json::Value>().unwrap(),
                         );
@@ -182,8 +210,8 @@ fn dump_metrics(mut writer: impl Write, registry: &Registry) -> Result<(), Box<d
                 }
             }
 
-            let metrics = serde_json::Value::Object(metrics);
-            serde_json::to_writer(&mut writer, &metrics)?;
+            let metrics_obj = serde_json::Value::Object(metrics_map);
+            serde_json::to_writer(&mut writer, &metrics_obj)?;
             writer.write_all(b",")?;
             writer.flush()?;
         }
