@@ -78,7 +78,7 @@
         state: stopped
 
     - name: Synchronize manually
-      command: sntp ntp1.hetzner.de
+      command: sntp 0.pool.ntp.org
 
     - name: Enable and restart NTP service
       service:

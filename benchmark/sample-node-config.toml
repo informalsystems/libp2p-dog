@@ -17,3 +17,4 @@ registry_prefix = ""
 redundancy = 1.0
 redundancy_delta = 10
 redundancy_interval_in_ms = 1000
+stop_delay_in_sec = 5

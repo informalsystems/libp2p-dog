@@ -20,8 +20,6 @@ mod logging;
 mod metrics;
 mod swarm;
 
-const STOP_DELAY_IN_SEC: u64 = 5;
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     logging::init();
@@ -67,14 +65,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let transaction_interval = Duration::from_millis(1000 / config.benchmark.tps);
     let transaction_timer = time::sleep(Duration::from_secs(u64::MAX)); // Wait for start timestamp
     tokio::pin!(transaction_timer);
+    let mut next_transaction_instant = time::Instant::now(); // Dummy value
 
     let dump_interval = Duration::from_millis(config.benchmark.dump_interval_in_ms);
     let dump_timer = time::sleep(Duration::from_secs(u64::MAX)); // Wait for start timestamp
     tokio::pin!(dump_timer);
+    let mut next_dump_instant = time::Instant::now(); // Dummy value
 
     let stop_instant = start_instant
         + Duration::from_secs(config.benchmark.duration_in_sec)
-        + Duration::from_secs(STOP_DELAY_IN_SEC);
+        + Duration::from_secs(config.benchmark.stop_delay_in_sec);
     let stop_timer = time::sleep_until(stop_instant);
     tokio::pin!(stop_timer);
 
@@ -96,8 +96,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             _ = &mut start_timer, if !start_timer.is_elapsed() => {
                 tracing::info!("Benchmark started");
-                transaction_timer.as_mut().reset(time::Instant::now() + transaction_interval);
-                dump_timer.as_mut().reset(time::Instant::now() + dump_interval);
+                next_transaction_instant = time::Instant::now();
+                transaction_timer.as_mut().reset(next_transaction_instant);
+                next_dump_instant = time::Instant::now();
+                dump_timer.as_mut().reset(next_dump_instant);
             }
 
             _ = &mut transaction_timer, if num_transactions < total_transactions => {
@@ -139,7 +141,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
 
-                transaction_timer.as_mut().reset(time::Instant::now() + transaction_interval);
+                next_transaction_instant += transaction_interval;
+                transaction_timer.as_mut().reset(next_transaction_instant);
                 num_transactions += 1;
             }
 
@@ -153,7 +156,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     tracing::error!("Failed to dump metrics: {:?}", e);
                 }
 
-                dump_timer.as_mut().reset(time::Instant::now() + Duration::from_millis(config.benchmark.dump_interval_in_ms));
+                next_dump_instant += dump_interval;
+                dump_timer.as_mut().reset(next_dump_instant);
             }
 
             _ = &mut stop_timer => {

@@ -48,6 +48,7 @@ pub(crate) struct Benchmark {
     pub redundancy: f64,
     pub redundancy_delta: u8,
     pub redundancy_interval_in_ms: u64,
+    pub stop_delay_in_sec: u64,
 }
 
 impl Config {

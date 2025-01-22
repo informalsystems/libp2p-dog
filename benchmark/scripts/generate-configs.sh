@@ -68,6 +68,7 @@ generate_node_config() {
   echo "redundancy = ${REDUNDANCY}" >> ${output}
   echo "redundancy_delta = ${DELTA}" >> ${output}
   echo "redundancy_interval_in_ms = ${REDUNDANCY_INTERVAL}" >> ${output}
+  echo "stop_delay_in_sec = ${STOP_DELAY}" >> ${output}
 }
 
 rm -rf ${OUTPUT}/*-*.toml
