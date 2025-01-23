@@ -61,6 +61,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         );
     let start_timer = time::sleep_until(start_instant);
     tokio::pin!(start_timer);
+    let mut started = false;
 
     let transaction_interval = Duration::from_millis(1000 / config.benchmark.tps);
     let transaction_timer = time::sleep(Duration::from_secs(u64::MAX)); // Wait for start timestamp
@@ -94,8 +95,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 handler::handle_swarm_event(event, &mut swarm, &config, &mut metrics).await;
             }
 
-            _ = &mut start_timer, if !start_timer.is_elapsed() => {
+            _ = &mut start_timer, if !started => {
                 tracing::info!("Benchmark started");
+                started = true;
                 next_transaction_instant = time::Instant::now();
                 transaction_timer.as_mut().reset(next_transaction_instant);
                 next_dump_instant = time::Instant::now();
