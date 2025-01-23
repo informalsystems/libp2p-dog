@@ -21,7 +21,7 @@ pub struct Config {
     transaction_id_fn: Arc<dyn Fn(&Transaction) -> TransactionId + Send + Sync + 'static>,
     max_transactions_per_rpc: Option<usize>,
     connection_handler_queue_len: usize,
-    cache_size: usize,
+    cache_time: Duration,
     target_redundancy: f64,
     redundancy_delta_percent: u8,
     redundancy_interval: Duration,
@@ -53,9 +53,9 @@ impl Config {
         self.connection_handler_queue_len
     }
 
-    /// The size of the cache for the `TransactionId`. The default is 1000.
-    pub fn cache_size(&self) -> usize {
-        self.cache_size
+    /// The time a transaction id is stored in the cache. The default is 30 seconds.
+    pub fn cache_time(&self) -> Duration {
+        self.cache_time
     }
 
     /// The target redundancy for the network. The default is 1.0.
@@ -128,7 +128,7 @@ impl Default for ConfigBuilder {
                 }),
                 max_transactions_per_rpc: None,
                 connection_handler_queue_len: 5000,
-                cache_size: 1000,
+                cache_time: Duration::from_secs(30),
                 target_redundancy: 1.0,
                 redundancy_delta_percent: 10,
                 redundancy_interval: Duration::from_secs(1),
@@ -174,9 +174,9 @@ impl ConfigBuilder {
         self
     }
 
-    /// The size of the cache for the `TransactionId`. The default is 1000.
-    pub fn cache_size(&mut self, cache_size: usize) -> &mut Self {
-        self.config.cache_size = cache_size;
+    /// The time a transaction id is stored in the cache. The default is 30 seconds.
+    pub fn cache_time(&mut self, cache_time: Duration) -> &mut Self {
+        self.config.cache_time = cache_time;
         self
     }
 

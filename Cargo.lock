@@ -1559,12 +1559,12 @@ dependencies = [
  "asynchronous-codec",
  "bytes",
  "either",
+ "fnv",
  "futures",
  "futures-timer",
  "hex_fmt",
  "libp2p",
  "libp2p-core",
- "lru",
  "prometheus-client",
  "quick-protobuf",
  "quick-protobuf-codec",
@@ -1573,6 +1573,7 @@ dependencies = [
  "thiserror 2.0.7",
  "tracing",
  "void",
+ "web-time",
 ]
 
 [[package]]

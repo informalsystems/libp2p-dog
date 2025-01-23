@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, VecDeque},
-    num::NonZeroUsize,
     task::Poll,
     time::SystemTime,
 };
@@ -14,7 +13,6 @@ use libp2p::{
     },
     PeerId,
 };
-use lru::LruCache;
 use prometheus_client::registry::Registry;
 use quick_protobuf::{MessageWrite, Writer};
 
@@ -27,6 +25,7 @@ use crate::{
     protocol::SIGNING_PREFIX,
     rpc::Sender,
     rpc_proto::proto,
+    time_cache::DuplicateCache,
     transform::{DataTransform, IdentityTransform},
     types::{
         ControlAction, HaveTx, PeerConnections, RawTransaction, ResetRoute, RpcOut, Transaction,
@@ -159,7 +158,7 @@ pub struct Behaviour<D = IdentityTransform> {
     redundancy_interval: Delay,
     redundancy_controller: Controller,
     router: Router,
-    cache: LruCache<TransactionId, ()>,
+    cache: DuplicateCache<TransactionId>,
     metrics: Option<Metrics>,
 }
 
@@ -203,7 +202,7 @@ where
             redundancy_interval: Delay::new(config.redundancy_interval()),
             redundancy_controller: Controller::new(&config),
             router: Router::new(),
-            cache: LruCache::new(NonZeroUsize::new(config.cache_size()).unwrap()),
+            cache: DuplicateCache::new(config.cache_time()),
             config,
             metrics: metrics.map(Metrics::new),
         })
@@ -240,7 +239,11 @@ where
 
         tracing::trace!("Publishing transaction");
 
-        self.cache.put(tx_id.clone(), ());
+        self.cache.insert(tx_id.clone());
+
+        if let Some(m) = self.metrics.as_mut() {
+            m.set_txs_cache_size(self.cache.len());
+        }
 
         if self.config.deliver_own_transactions() {
             self.events
@@ -474,8 +477,12 @@ where
 
         // TODO: validate transaction if needed
 
-        if self.cache.put(tx_id.clone(), ()).is_some() {
+        if !self.cache.insert(tx_id.clone()) {
             tracing::debug!(transaction=%tx_id, "Transaction already received, ignoring");
+
+            if let Some(m) = self.metrics.as_mut() {
+                m.set_txs_cache_size(self.cache.len());
+            }
 
             self.redundancy_controller.incr_duplicate_txs_count();
 
@@ -505,6 +512,7 @@ where
 
         if let Some(m) = self.metrics.as_mut() {
             m.tx_recv();
+            m.set_txs_cache_size(self.cache.len());
         }
 
         tracing::debug!("Deliver received transaction to user");

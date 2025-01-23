@@ -39,6 +39,9 @@ pub(crate) struct Metrics {
     txs_invalid_counts: Counter,
     /// Number of bytes received.
     txs_recv_bytes: Counter,
+
+    /// Transactions cache size.
+    txs_cache_size: Gauge,
 }
 
 impl Metrics {
@@ -58,6 +61,7 @@ impl Metrics {
         let txs_recv_counts = Counter::default();
         let txs_invalid_counts = Counter::default();
         let txs_recv_bytes = Counter::default();
+        let txs_cache_size = Gauge::default();
 
         registry.register("peers_count", "Number of peers.", peers_count.clone());
         registry.register("redundancy", "Redundancy.", redundancy.clone());
@@ -126,6 +130,11 @@ impl Metrics {
             "Number of bytes received.",
             txs_recv_bytes.clone(),
         );
+        registry.register(
+            "txs_cache_size",
+            "Transactions cache size.",
+            txs_cache_size.clone(),
+        );
 
         Self {
             peers_count,
@@ -143,6 +152,7 @@ impl Metrics {
             txs_recv_counts,
             txs_invalid_counts,
             txs_recv_bytes,
+            txs_cache_size,
         }
     }
 
@@ -206,5 +216,13 @@ impl Metrics {
 
     pub(crate) fn register_invalid_tx(&mut self) {
         self.txs_invalid_counts.inc();
+    }
+
+    pub(crate) fn set_txs_cache_size(&mut self, size: usize) {
+        if let Ok(size) = size.try_into() {
+            self.txs_cache_size.set(size);
+        } else {
+            tracing::error!("Failed to set transactions cache size");
+        }
     }
 }

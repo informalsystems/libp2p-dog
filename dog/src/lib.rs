@@ -7,6 +7,7 @@ mod metrics;
 pub mod protocol;
 mod rpc;
 mod rpc_proto;
+mod time_cache;
 mod transform;
 mod types;
 
