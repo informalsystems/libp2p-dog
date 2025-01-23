@@ -361,7 +361,7 @@ where
             Ok(()) => true,
             Err(rpc) => {
                 // Sending failed because the channel is full.
-                tracing::warn!(peer=%peer_id, "Send Queue full. Could not send {:?}.", rpc);
+                tracing::warn!(peer=%peer_id, "Send Queue full. Could not send {}.", rpc);
                 false
             }
         }
@@ -678,7 +678,7 @@ where
                     tracing::warn!(
                         peer=%propagation_source,
                         from=%transaction.from,
-                        "Invalid transaction from peer. Reason: {:?}",
+                        "Invalid transaction from peer. Reason: {}",
                         validation_error,
                     );
                 }

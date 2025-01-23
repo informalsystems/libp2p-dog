@@ -146,12 +146,24 @@ impl From<HaveTx> for proto::ControlHaveTx {
     }
 }
 
+impl std::fmt::Display for HaveTx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HaveTx {{ from: {} }}", self.from)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ResetRoute {}
 
 impl From<ResetRoute> for proto::ControlResetRoute {
     fn from(_: ResetRoute) -> Self {
         proto::ControlResetRoute {}
+    }
+}
+
+impl std::fmt::Display for ResetRoute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ResetRoute {{}}")
     }
 }
 
@@ -214,9 +226,9 @@ impl std::fmt::Display for RpcOut {
             RpcOut::Forward { tx, .. } => {
                 write!(f, "Forward {{ from: {}, seqno: {} }}", tx.from, tx.seqno)
             }
-            RpcOut::HaveTx(have_tx) => write!(f, "HaveTx {{ have_tx: {:?} }}", have_tx),
+            RpcOut::HaveTx(have_tx) => write!(f, "HaveTx {{ have_tx: {} }}", have_tx),
             RpcOut::ResetRoute(reset_route) => {
-                write!(f, "ResetRoute {{ reset_route: {:?} }}", reset_route)
+                write!(f, "ResetRoute {{ reset_route: {} }}", reset_route)
             }
         }
     }
