@@ -95,7 +95,7 @@ impl<const N: usize> Test<N> {
             .try_into()
             .unwrap_or_else(|_| panic!("Failed to convert Vec to array"));
         // Wait for the swarms to initialize and dial each other
-        sleep(Duration::from_secs(2)).await;
+        sleep(Duration::from_secs(5)).await;
     }
 
     pub async fn kill_node(&mut self, node: usize) {
