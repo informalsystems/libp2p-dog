@@ -1,0 +1,10 @@
+- name: Reset all TC rules
+  hosts: all
+
+  vars:
+    ansible_ssh_user: root
+
+  tasks:
+    - name: Reset all TC rules
+      shell: tc qdisc del dev eth0 root
+      ignore_errors: yes

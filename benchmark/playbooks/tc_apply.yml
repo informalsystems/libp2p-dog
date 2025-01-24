@@ -1,0 +1,26 @@
+- name: Apply all TC rules
+  hosts: all
+  become: true
+
+  vars:
+    ansible_ssh_user: root
+
+  tasks:
+    - name: Upload latencies csv file
+      copy:
+        src: "{{ playbook_dir }}/../config/latencies.csv"
+        dest: /home/bob/latencies.csv
+
+    - name: Upload machines IPs list
+      copy:
+        src: "{{ playbook_dir }}/../machines.txt"
+        dest: /home/bob/machines.txt
+
+    - name: Upload tc script
+      copy:
+        src: "{{ playbook_dir }}/../scripts/apply-tc-rules.py"
+        dest: /home/bob/apply-tc-rules.py
+        mode: 0744
+
+    - name: Apply tc rules
+      command: "/home/bob/apply-tc-rules.py /home/bob/latencies.csv /home/bob/machines.txt {{ ansible_host }}"
