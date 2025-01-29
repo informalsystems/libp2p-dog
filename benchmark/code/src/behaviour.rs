@@ -4,6 +4,7 @@ use libp2p::{
     gossipsub::{self, IdentTopic},
     identity::Keypair,
     swarm::{behaviour::toggle::Toggle, NetworkBehaviour},
+    PeerId,
 };
 use prometheus_client::registry::Registry;
 
@@ -43,7 +44,9 @@ impl Behaviour {
         let dog = if let Protocol::Dog = config.benchmark.protocol {
             Toggle::from(Some(
                 libp2p_dog::Behaviour::new_with_metrics(
-                    libp2p_dog::TransactionAuthenticity::Signed(key.clone()),
+                    libp2p_dog::TransactionAuthenticity::Author(PeerId::from_public_key(
+                        &key.public(),
+                    )),
                     libp2p_dog::ConfigBuilder::default()
                         .target_redundancy(config.benchmark.redundancy)
                         .redundancy_delta_percent(config.benchmark.redundancy_delta)
@@ -53,6 +56,7 @@ impl Behaviour {
                         .max_transmit_size(MAX_TRANSMIT_SIZE)
                         .connection_handler_publish_duration(Duration::from_secs(10))
                         .connection_handler_forward_duration(Duration::from_secs(10))
+                        .validation_mode(libp2p_dog::ValidationMode::None)
                         .build()
                         .expect("Failed to build dog config"),
                     registry,
@@ -66,11 +70,12 @@ impl Behaviour {
         let gossipsub = if let Protocol::Gossipsub = config.benchmark.protocol {
             Toggle::from({
                 let mut behaviour = gossipsub::Behaviour::new_with_metrics(
-                    gossipsub::MessageAuthenticity::Signed(key.clone()),
+                    gossipsub::MessageAuthenticity::Author(PeerId::from_public_key(&key.public())),
                     gossipsub::ConfigBuilder::default()
                         .max_transmit_size(MAX_TRANSMIT_SIZE)
                         .publish_queue_duration(Duration::from_secs(10))
                         .forward_queue_duration(Duration::from_secs(10))
+                        .validation_mode(gossipsub::ValidationMode::None)
                         .build()
                         .expect("Failed to build gossipsub config"),
                     registry,
