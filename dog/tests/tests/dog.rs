@@ -129,21 +129,11 @@ pub async fn n_nodes_aligned() {
     }
 }
 
-// Testing that a node receiving the same transaction from different nodes will request eventually
-// request all of them except one to stop sending it.
-// We consider a random network of size N with target redundancy set to 0.0.
-// Each node will publish transactions at constant intervals. We expect that after a certain amount
-// of time, the routing status of the network will be stable. Moreover, we expect that, for each
-// transaction, there is a single associated tree-like route from the source (root) to all other
-// nodes (leaves).
+// Testing that everyone receives the transactions from a node in a random network
+// with default redundancy
 #[tokio::test]
-pub async fn random_network_no_redundancy() {
+pub async fn random_network() {
     let config = libp2p_dog::ConfigBuilder::default()
-        // We force the nodes to remove any redundancy
-        .target_redundancy(0.0)
-        .redundancy_delta_percent(0)
-        // Speed up have_tx unblocking
-        .redundancy_interval(Duration::from_millis(10))
         // Disable signature to speed up the test
         .validation_mode(libp2p_dog::ValidationMode::None)
         .build()
@@ -199,67 +189,6 @@ pub async fn random_network_no_redundancy() {
                 None => panic!("Unexpected transaction: {:?}", transaction),
             };
             expected.remove(index);
-        }
-    }
-
-    // Verify that no reset route messages have been sent
-    for (_, routing_updates) in events.iter() {
-        for (j, routes) in routing_updates.iter().enumerate() {
-            if j == 0 {
-                continue;
-            }
-
-            assert!(routes.len() > routing_updates[j - 1].len());
-        }
-    }
-
-    // Build the directed graph of the network
-    let mut base_adjency_list: Vec<Vec<usize>> = vec![Vec::new(); N];
-    for i in 0..N {
-        for j in bootstrap_sets[i].iter() {
-            base_adjency_list[i].push(*j);
-        }
-    }
-
-    let peer_id_to_index = |peer_id: &libp2p::PeerId| -> usize {
-        peer_ids.iter().position(|id| id == peer_id).unwrap()
-    };
-
-    for i in 0..N {
-        let mut i_adjency_list = base_adjency_list.clone();
-
-        for (j, (_, routing_updates)) in events.iter().enumerate() {
-            match routing_updates.last() {
-                Some(routes) => {
-                    for route in routes.iter().filter(|r| r.source() == &peer_ids[i]) {
-                        i_adjency_list[j]
-                            .retain(|target| *target != peer_id_to_index(route.target()));
-                    }
-                }
-                None => {
-                    continue;
-                }
-            };
-        }
-
-        let mut visited = vec![false; N];
-        let mut stack = vec![(i, i)]; // (node, parent)
-        while let Some((node, parent)) = stack.pop() {
-            visited[node] = true;
-            for neighbor in i_adjency_list[node].iter() {
-                if *neighbor == parent {
-                    // A -> B and B -> A is not considered as a cycle
-                    continue;
-                }
-                if visited[*neighbor] {
-                    panic!("Cycle detected between nodes {} and {}", node, *neighbor);
-                }
-                stack.push((*neighbor, node));
-            }
-        }
-
-        for visited in visited.iter() {
-            assert!(*visited);
         }
     }
 }

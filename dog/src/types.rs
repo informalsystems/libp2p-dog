@@ -125,30 +125,30 @@ pub enum ControlAction {
 
 #[derive(Debug, Clone)]
 pub struct HaveTx {
-    pub from: PeerId,
+    pub tx_id: TransactionId,
 }
 
 impl TryFrom<proto::ControlHaveTx> for HaveTx {
     type Error = ParseError;
 
     fn try_from(have_tx: proto::ControlHaveTx) -> Result<Self, Self::Error> {
-        PeerId::from_bytes(&have_tx.from)
-            .map(|from| HaveTx { from })
-            .map_err(|err| err)
+        Ok(HaveTx {
+            tx_id: TransactionId::new(&have_tx.tx_id),
+        })
     }
 }
 
 impl From<HaveTx> for proto::ControlHaveTx {
     fn from(have_tx: HaveTx) -> Self {
         proto::ControlHaveTx {
-            from: have_tx.from.to_bytes(),
+            tx_id: have_tx.tx_id.0,
         }
     }
 }
 
 impl std::fmt::Display for HaveTx {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "HaveTx {{ from: {} }}", self.from)
+        write!(f, "HaveTx {{ tx_id: {} }}", self.tx_id)
     }
 }
 

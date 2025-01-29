@@ -21,7 +21,7 @@ message ControlMessage {
 }
 
 message ControlHaveTx {
-    bytes from = 1;
+    bytes tx_id = 1;
 }
 
 message ControlResetRoute {}

@@ -158,7 +158,7 @@ pub struct Behaviour<D = IdentityTransform> {
     redundancy_interval: Delay,
     redundancy_controller: Controller,
     router: Router,
-    cache: DuplicateCache<TransactionId>,
+    cache: DuplicateCache<TransactionId, PeerId>,
     metrics: Option<Metrics>,
 }
 
@@ -239,7 +239,8 @@ where
 
         tracing::trace!("Publishing transaction");
 
-        self.cache.insert(tx_id.clone());
+        self.cache
+            .insert(tx_id.clone(), self.publish_config.get_own_id());
 
         if let Some(m) = self.metrics.as_mut() {
             m.set_txs_cache_size(self.cache.len());
@@ -376,10 +377,8 @@ where
     ) -> bool {
         tracing::debug!(transaction=%transaction_id, "Forwarding transaction");
 
-        // TODO: should remove peers that already received the transaction
-        // TODO: see RawTransaction TODOs
         let recipient_peers = self.router.filter_valid_routes(
-            raw_transaction.from,
+            *propagation_source,
             self.connected_peers
                 .keys()
                 .filter(|&peer| peer != propagation_source && peer != &raw_transaction.from)
@@ -477,7 +476,7 @@ where
 
         // TODO: validate transaction if needed
 
-        if !self.cache.insert(tx_id.clone()) {
+        if !self.cache.insert(tx_id.clone(), *propagation_source) {
             tracing::debug!(transaction=%tx_id, "Transaction already received, ignoring");
 
             if let Some(m) = self.metrics.as_mut() {
@@ -492,12 +491,7 @@ where
 
             tracing::debug!(peer=%propagation_source, "Sending HaveTx to peer");
 
-            if self.send_transaction(
-                *propagation_source,
-                RpcOut::HaveTx(HaveTx {
-                    from: transaction.from,
-                }),
-            ) {
+            if self.send_transaction(*propagation_source, RpcOut::HaveTx(HaveTx { tx_id })) {
                 self.router.register_have_tx_sent(*propagation_source);
                 self.redundancy_controller.block_have_tx();
 
@@ -539,11 +533,17 @@ where
         }
     }
 
-    fn handle_have_tx(&mut self, froms: Vec<PeerId>, propagation_source: &PeerId) {
-        tracing::debug!(peer=%propagation_source, "Disabling {} routes to peer", froms.len());
+    fn handle_have_tx(&mut self, tx_ids: Vec<TransactionId>, propagation_source: &PeerId) {
+        tracing::debug!(peer=%propagation_source, "Received HaveTx from peer with {} transaction ids", tx_ids.len());
 
-        for from in froms {
-            self.router.disable_route(from, *propagation_source);
+        for tx_id in tx_ids {
+            if let Some(source) = self.cache.get(&tx_id) {
+                if *source == *propagation_source || *source == self.publish_config.get_own_id() {
+                    continue;
+                }
+                tracing::debug!(peer=%propagation_source, "Disabling route from {} to peer", source);
+                self.router.disable_route(*source, *propagation_source);
+            }
         }
 
         self.events
@@ -695,20 +695,20 @@ where
                 }
 
                 // Handle control messages
-                let mut have_tx_froms = Vec::new();
+                let mut have_tx_ids = Vec::new();
                 let mut reset_route = false;
                 for control_msg in rpc.control_msgs {
                     match control_msg {
                         ControlAction::HaveTx(have_tx) => {
-                            have_tx_froms.push(have_tx.from);
+                            have_tx_ids.push(have_tx.tx_id);
                         }
                         ControlAction::ResetRoute(_) => {
                             reset_route = true;
                         }
                     }
                 }
-                if !have_tx_froms.is_empty() {
-                    self.handle_have_tx(have_tx_froms, &propagation_source);
+                if !have_tx_ids.is_empty() {
+                    self.handle_have_tx(have_tx_ids, &propagation_source);
                 }
                 if reset_route {
                     self.handle_reset_route(&propagation_source);

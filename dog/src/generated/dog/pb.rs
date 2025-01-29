@@ -136,7 +136,7 @@ impl MessageWrite for ControlMessage {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct ControlHaveTx {
-    pub from: Vec<u8>,
+    pub tx_id: Vec<u8>,
 }
 
 impl<'a> MessageRead<'a> for ControlHaveTx {
@@ -144,7 +144,7 @@ impl<'a> MessageRead<'a> for ControlHaveTx {
         let mut msg = Self::default();
         while !r.is_eof() {
             match r.next_tag(bytes) {
-                Ok(10) => msg.from = r.read_bytes(bytes)?.to_owned(),
+                Ok(10) => msg.tx_id = r.read_bytes(bytes)?.to_owned(),
                 Ok(t) => { r.read_unknown(bytes, t)?; }
                 Err(e) => return Err(e),
             }
@@ -156,11 +156,11 @@ impl<'a> MessageRead<'a> for ControlHaveTx {
 impl MessageWrite for ControlHaveTx {
     fn get_size(&self) -> usize {
         0
-        + if self.from.is_empty() { 0 } else { 1 + sizeof_len((&self.from).len()) }
+        + if self.tx_id.is_empty() { 0 } else { 1 + sizeof_len((&self.tx_id).len()) }
     }
 
     fn write_message<W: WriterBackend>(&self, w: &mut Writer<W>) -> Result<()> {
-        if !self.from.is_empty() { w.write_with_tag(10, |w| w.write_bytes(&**&self.from))?; }
+        if !self.tx_id.is_empty() { w.write_with_tag(10, |w| w.write_bytes(&**&self.tx_id))?; }
         Ok(())
     }
 }

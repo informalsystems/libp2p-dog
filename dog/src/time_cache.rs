@@ -1,55 +1,57 @@
+use fnv::FnvHashMap;
 use std::{collections::VecDeque, time::Duration};
-
-use fnv::FnvHashSet;
 use web_time::Instant;
 
-struct ExpiringValues<Element> {
-    value: Element,
+struct ExpiringEntry<K> {
+    key: K,
     expiration: Instant,
 }
 
-pub(crate) struct DuplicateCache<T> {
+pub(crate) struct DuplicateCache<K, V> {
     /// Size of the cache.
     len: usize,
-    /// Set of values in the cache.
-    values: FnvHashSet<T>,
-    /// List of values in order of expiration.
-    list: VecDeque<ExpiringValues<T>>,
+    /// Map of keys to values in the cache.
+    values: FnvHashMap<K, V>,
+    /// List of keys in order of expiration.
+    list: VecDeque<ExpiringEntry<K>>,
     /// The time values remain in the cache.
     ttl: Duration,
 }
 
-impl<T> DuplicateCache<T>
+impl<K, V> DuplicateCache<K, V>
 where
-    T: Eq + std::hash::Hash + Clone,
+    K: Eq + std::hash::Hash + Clone,
+    V: Clone,
 {
     pub(crate) fn new(ttl: Duration) -> Self {
         DuplicateCache {
             len: 0,
-            values: FnvHashSet::default(),
+            values: FnvHashMap::default(),
             list: VecDeque::new(),
             ttl,
         }
     }
 
     fn remove_expired_values(&mut self, now: Instant) {
-        while let Some(element) = self.list.pop_front() {
-            if element.expiration > now {
-                self.list.push_front(element);
+        while let Some(entry) = self.list.pop_front() {
+            if entry.expiration > now {
+                self.list.push_front(entry);
                 break;
             }
             self.len -= 1;
-            self.values.remove(&element.value);
+            self.values.remove(&entry.key);
         }
     }
 
-    pub(crate) fn insert(&mut self, value: T) -> bool {
+    pub(crate) fn insert(&mut self, key: K, value: V) -> bool {
         let now = Instant::now();
         self.remove_expired_values(now);
-        if self.values.insert(value.clone()) {
+
+        if !self.values.contains_key(&key) {
+            self.values.insert(key.clone(), value);
             self.len += 1;
-            self.list.push_back(ExpiringValues {
-                value,
+            self.list.push_back(ExpiringEntry {
+                key,
                 expiration: now + self.ttl,
             });
             true
@@ -58,8 +60,12 @@ where
         }
     }
 
-    pub(crate) fn contains(&self, value: &T) -> bool {
-        self.values.contains(value)
+    pub(crate) fn contains(&self, key: &K) -> bool {
+        self.values.contains_key(key)
+    }
+
+    pub(crate) fn get(&self, key: &K) -> Option<&V> {
+        self.values.get(key)
     }
 
     pub(crate) fn len(&self) -> usize {
