@@ -5,5 +5,6 @@ benchmark/*.json
 benchmark/output/*/
 benchmark/config/*
 !benchmark/config/README.md
+!benchmark/config/latencies.csv
 !benchmark/config/ntp.conf
 target
