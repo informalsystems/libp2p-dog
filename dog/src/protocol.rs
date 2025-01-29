@@ -1,4 +1,4 @@
-use std::{future::Future, iter, pin::Pin};
+use std::{convert::Infallible, future::Future, iter, pin::Pin};
 
 use asynchronous_codec::{Decoder, Encoder, Framed};
 use futures::future;
@@ -9,7 +9,6 @@ use libp2p::{
     InboundUpgrade, OutboundUpgrade, PeerId, StreamProtocol,
 };
 use quick_protobuf::Writer;
-use void::Void;
 
 use crate::{
     config::ValidationMode,
@@ -59,7 +58,7 @@ where
     TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     type Output = Framed<TSocket, DogCodec>;
-    type Error = Void; // TODO: change to Infallible with next rust-libp2p release
+    type Error = Infallible;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_inbound(self, socket: TSocket, _: Self::Info) -> Self::Future {
@@ -75,7 +74,7 @@ where
     TSocket: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     type Output = Framed<TSocket, DogCodec>;
-    type Error = Void; // TODO: change to Infallible with next rust-libp2p release
+    type Error = Infallible;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_outbound(self, socket: TSocket, _: Self::Info) -> Self::Future {

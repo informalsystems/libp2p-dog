@@ -413,7 +413,7 @@ impl ConnectionHandler for Handler {
                     ConnectionEvent::DialUpgradeError(DialUpgradeError {
                         error: StreamUpgradeError::Apply(e),
                         ..
-                    }) => void::unreachable(e),
+                    }) => libp2p_core::util::unreachable(e),
                     ConnectionEvent::DialUpgradeError(DialUpgradeError {
                         error: StreamUpgradeError::NegotiationFailed,
                         ..
