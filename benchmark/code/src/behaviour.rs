@@ -75,7 +75,7 @@ impl Behaviour {
                         .max_transmit_size(MAX_TRANSMIT_SIZE)
                         .publish_queue_duration(Duration::from_secs(10))
                         .forward_queue_duration(Duration::from_secs(10))
-                        .validation_mode(gossipsub::ValidationMode::None)
+                        .validation_mode(gossipsub::ValidationMode::Permissive)
                         .build()
                         .expect("Failed to build gossipsub config"),
                     registry,
