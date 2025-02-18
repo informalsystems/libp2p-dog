@@ -23,6 +23,7 @@ libp2p-dog = { path = "../../dog" }
 prometheus-client = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+sysinfo = "0.33.1"
 tokio = { workspace = true, features = ["full"] }
 toml = { workspace = true }
 tracing = { workspace = true }

@@ -10,6 +10,7 @@ use behaviour::GOSSIPSUB_TOPIC_STR;
 use libp2p::{futures::StreamExt, gossipsub::IdentTopic, swarm::dial_opts::DialOpts};
 use metrics::Metrics;
 use prometheus_client::{encoding::text::encode, registry::Registry};
+use sysinfo::System;
 use tokio::{select, time};
 
 mod args;
@@ -89,6 +90,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         start_instant - time::Instant::now(),
     );
 
+    let mut sys = System::new();
+    // dummy call #1 as recommended by the docs
+    sys.refresh_cpu_usage();
+
     loop {
         select! {
             event = swarm.select_next_some() => {
@@ -102,6 +107,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 transaction_timer.as_mut().reset(next_transaction_instant);
                 next_dump_instant = time::Instant::now();
                 dump_timer.as_mut().reset(next_dump_instant);
+                // dummy call #2 as recommended by the docs
+                sys.refresh_cpu_usage();
             }
 
             _ = &mut transaction_timer, if num_transactions < total_transactions => {
@@ -154,7 +161,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     tracing::info!("Dumping metrics");
                 }
 
-                if let Err(e) = dump_metrics(&mut writer, &registry, &metrics) {
+                if let Err(e) = dump_metrics(&mut writer, &registry, &metrics, &mut sys) {
                     tracing::error!("Failed to dump metrics: {:?}", e);
                 }
 
@@ -186,6 +193,7 @@ fn dump_metrics(
     mut writer: impl Write,
     registry: &Registry,
     metrics: &Metrics,
+    sys: &mut System,
 ) -> Result<(), Box<dyn Error>> {
     let mut output = String::new();
     match encode(&mut output, &registry) {
@@ -202,6 +210,12 @@ fn dump_metrics(
             metrics_map.insert(
                 "total_delivered".to_string(),
                 serde_json::Value::Number(serde_json::Number::from(metrics.total_delivered())),
+            );
+
+            sys.refresh_cpu_usage();
+            metrics_map.insert(
+                "cpu_usage".to_string(),
+                serde_json::Value::Number(serde_json::Number::from(sys.global_cpu_usage() as u64)),
             );
 
             for line in output.lines() {
