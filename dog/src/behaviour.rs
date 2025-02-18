@@ -538,7 +538,7 @@ where
 
         for tx_id in tx_ids {
             if let Some(source) = self.cache.get(&tx_id) {
-                if *source == *propagation_source || *source == self.publish_config.get_own_id() {
+                if *source == *propagation_source {
                     continue;
                 }
                 tracing::debug!(peer=%propagation_source, "Disabling route from {} to peer", source);
