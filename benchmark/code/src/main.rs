@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     swarm.listen_on(config.node.addr.clone())?;
 
-    time::sleep(Duration::from_secs(5)).await; // Make sure all other nodes are ready
+    time::sleep(Duration::from_secs(10)).await; // Make sure all other nodes are ready
 
     for peer_addr in &config.node.peers {
         swarm.dial(

@@ -97,8 +97,13 @@ impl Metrics {
             }
         }
 
-        published_writer.seek(std::io::SeekFrom::End(-1))?; // Remove trailing comma
-        delivered_writer.seek(std::io::SeekFrom::End(-1))?; // Remove trailing comma
+        if !self.published.is_empty() {
+            published_writer.seek(std::io::SeekFrom::End(-1))?; // Remove trailing comma
+        }
+
+        if !self.delivered.is_empty() {
+            delivered_writer.seek(std::io::SeekFrom::End(-1))?; // Remove trailing comma
+        }
 
         published_writer.write_all(b"]}")?;
         delivered_writer.write_all(b"]}")?;

@@ -22,7 +22,7 @@
           -v /home/{{ ansible_user }}/output:/output \
           -w /app \
           dog-benchmark:latest /bin/bash -c \
-          "benchmark --dir /output --config /config/node.toml --start-timestamp {{ (timestamp_output.stdout | int) + 15000 }} > /output/benchmark.log 2>&1"
+          "benchmark --dir /output --config /config/node.toml --start-timestamp {{ (timestamp_output.stdout | int) + 25000 }} > /output/benchmark.log 2>&1"
 
     - name: Copy benchmark output to local machine
       synchronize:
