@@ -1,6 +1,9 @@
 - name: Start the join benchmark
   hosts: all
 
+  vars:
+    enable_logging: false
+
   tasks:
     - name: Delete previous outputs
       shell: rm -rf {{ playbook_dir }}/../output/output-*
@@ -22,7 +25,7 @@
           -v /home/{{ ansible_user }}/output:/output \
           -w /app \
           dog-benchmark:latest /bin/bash -c \
-          "benchmark --dir /output --config /config/node.toml --start-timestamp {{ (timestamp_output.stdout | int) + 25000 }} > /output/benchmark.log 2>&1"
+          "benchmark --dir /output --config /config/node.toml --start-timestamp {{ (timestamp_output.stdout | int) + 25000 }} > {{ '/output/benchmark.log' if enable_logging else '/dev/null' }} 2>&1"
 
     - name: Copy benchmark output to local machine
       synchronize:
